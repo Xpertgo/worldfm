@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World FM Radio</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #00b4d8;
+            --secondary: #90e0ef;
+            --background: #0d1b2a;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --text-light: #ffffff;
+            --shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #0d1b2a 0%, #1b263b 100%);
+            color: var(--text-light);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            overflow-y: auto;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding-bottom: 100px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 25px;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 2px 10px rgba(0, 180, 216, 0.5);
+        }
+
+        .controls {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: var(--shadow);
+        }
+
+        .control-group {
+            flex: 1;
+            min-width: 220px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-group label {
+            font-size: 0.95em;
+            font-weight: 600;
+            color: var(--secondary);
+        }
+
+        select {
+            padding: 12px 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--card-bg);
+            color: var(--text-light);
+            width: 100%;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+        }
+
+        select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 10px rgba(0, 180, 216, 0.5);
+            outline: none;
+        }
+
+        button {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            border: none;
+            cursor: pointer;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+        }
+
+        button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(0, 180, 216, 0.7);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        button.active {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 180, 216, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(0, 180, 216, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 180, 216, 0); }
+        }
+
+        .player {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .player.expanded {
+            padding: 20px;
+        }
+
+        .now-playing {
+            flex: 1;
+            font-weight: 600;
+            font-size: 1.2em;
+            overflow: hidden;
+            position: relative;
+            white-space: nowrap;
+        }
+
+        .now-playing span {
+            display: inline-block;
+            white-space: nowrap;
+            padding-right: 20px;
+            transition: transform 0.3s ease;
+        }
+
+        .now-playing.playing.overflowing span {
+            animation: marquee 15s linear infinite;
+            animation-play-state: running;
+        }
+
+        .now-playing.playing.overflowing span:hover {
+            animation-play-state: paused;
+            cursor: pointer;
+        }
+
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(calc(-100% - 20px)); }
+        }
+
+        .now-playing.playing::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 10px;
+            margin-left: 10px;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 10"><path fill="none" stroke="%2300b4d8" stroke-width="2" d="M0,5 C2,2 4,8 6,5 C8,2 10,8 12,5 C14,2 16,8 18,5"/></svg>');
+            animation: wave 1s infinite;
+        }
+
+        @keyframes wave {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(-2px); }
+            100% { transform: translateY(0); }
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 25px;
+            font-size: 1.3em;
+            color: var(--primary);
+            background: var(--card-bg);
+            border-radius: 10px;
+            box-shadow: var(--shadow);
+        }
+
+        .error {
+            color: #ff6b6b;
+            margin: 15px 0;
+            padding: 15px;
+            background: rgba(255, 107, 107, 0.1);
+            border-radius: 10px;
+            white-space: pre-wrap;
+            box-shadow: var(--shadow);
+        }
+
+        .retry-button {
+            background: linear-gradient(45deg, #4CAF50, #66BB6A);
+            margin-left: 10px;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #volume {
+            width: 120px;
+            accent-color: var(--primary);
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+
+        #volumeLevel {
+            min-width: 40px;
+            text-align: right;
+            font-size: 0.95em;
+            color: var(--secondary);
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding-bottom: 120px;
+            }
+            .controls {
+                flex-direction: column;
+                gap: 15px;
+                padding: 15px;
+            }
+            .control-group {
+                width: 100%;
+            }
+            .player {
+                flex-direction: column;
+                padding: 10px;
+                bottom: 10px;
+                left: 10px;
+                right: 10px;
+                gap: 10px;
+            }
+            .now-playing {
+                text-align: center;
+                font-size: 1em;
+                max-width: 100%;
+            }
+            .now-playing.playing.overflowing span {
+                animation: marquee 12s linear infinite;
+            }
+            button {
+                width: 40px;
+                height: 40px;
+                font-size: 1.2em;
+            }
+            .volume-control {
+                width: 100%;
+                justify-content: center;
+            }
+            #volume {
+                width: 80%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>World FM Radio</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="countrySelect">Country:</label>
+                <select id="countrySelect" disabled aria-label="Select Country">
+                    <option value="">Loading countries...</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="languageSelect">Language:</label>
+                <select id="languageSelect" disabled aria-label="Select Language">
+                    <option value="">Select country first</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="stationSelect">Station:</label>
+                <select id="stationSelect" disabled aria-label="Select Station">
+                    <option value="">Select language first</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="loading" id="loading" aria-live="polite">
+            <i class="fas fa-spinner fa-spin"></i> Loading...
+        </div>
+        <div id="errorContainer" aria-live="assertive"></div>
+
+        <div class="player">
+            <div class="now-playing" id="nowPlaying"><span>Select a station to play</span></div>
+            <button id="playPauseBtn" disabled aria-label="Play/Pause"><i class="fas fa-play"></i></button>
+            <div class="volume-control">
+                <input type="range" id="volume" min="0" max="1" step="0.01" value="1" aria-label="Volume">
+                <span id="volumeLevel">100%</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_SERVERS = [
+            'https://de1.api.radio-browser.info',
+            'https://nl1.api.radio-browser.info',
+            'https://at1.api.radio-browser.info'
+        ];
+        const MAX_RETRIES = 3;
+        const MIN_STATION_COUNT = 5;
+        const TEST_STREAM_TIMEOUT = 5000;
+        const SKIP_STREAM_TEST = false; // Set to true to skip stream testing for debugging
+        const audio = new Audio();
+        let currentStation = null;
+        let isPlaying = false;
+        let hasError = false;
+        let countryStations = [];
+        let stations = [];
+
+        audio.autoplay = false;
+        audio.preload = 'auto';
+
+        // Audio event listeners
+        audio.addEventListener('playing', () => {
+            isPlaying = true;
+            hasError = false;
+            updatePlayerDisplay();
+            clearError();
+            console.log('Audio is playing');
+        });
+
+        audio.addEventListener('pause', () => {
+            isPlaying = false;
+            updatePlayerDisplay();
+            console.log('Audio paused');
+        });
+
+        audio.addEventListener('error', (e) => {
+            hasError = true;
+            console.error('Audio error:', e);
+            if (!isPlaying) {
+                showError('Stream error: Station may be offline or incompatible');
+            } else {
+                showError('Stream interrupted: Station may have gone offline');
+            }
+            updatePlayerDisplay();
+        });
+
+        audio.addEventListener('canplay', () => {
+            console.log('Audio can play');
+        });
+
+        // Fetch from fastest server
+        async function fetchFromFastestServer(endpoint, retryCount = 0) {
+            const fetchPromises = API_SERVERS.map(server =>
+                fetch(`${server}${endpoint}`).then(res => {
+                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                    return res.json();
+                }).catch(err => {
+                    console.error(`Server ${server} failed:`, err);
+                    return null;
+                })
+            );
+            try {
+                const results = await Promise.race(fetchPromises.filter(p => p));
+                if (!results) throw new Error('All servers failed');
+                return results;
+            } catch (error) {
+                if (retryCount < MAX_RETRIES) {
+                    console.log('Retrying fetch, attempt:', retryCount + 1);
+                    return fetchFromFastestServer(endpoint, retryCount + 1);
+                }
+                throw error;
+            }
+        }
+
+        // Fetch countries
+        async function fetchCountries() {
+            showLoading(true);
+            try {
+                const countries = await fetchFromFastestServer('/json/countries');
+                if (!countries.length) throw new Error('No countries found');
+                populateCountries(countries);
+                showError('');
+            } catch (error) {
+                showError(`Failed to load countries: ${error.message}\nPlease check your internet connection`, true);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Populate country dropdown
+        function populateCountries(countries) {
+            const select = document.getElementById('countrySelect');
+            select.innerHTML = '<option value="">Select Country</option>';
+            countries.sort((a, b) => a.name.localeCompare(b.name)).forEach(country => {
+                const option = document.createElement('option');
+                option.value = country.iso_3166_1;
+                option.textContent = country.name;
+                select.appendChild(option);
+            });
+            select.disabled = false;
+            select.addEventListener('change', async (e) => {
+                const countryCode = e.target.value;
+                if (countryCode) {
+                    await loadStationsByCountry(countryCode);
+                    document.getElementById('languageSelect').disabled = false;
+                } else {
+                    document.getElementById('languageSelect').innerHTML = '<option value="">Select country first</option>';
+                    document.getElementById('languageSelect').disabled = true;
+                    document.getElementById('stationSelect').innerHTML = '<option value="">Select language first</option>';
+                    document.getElementById('stationSelect').disabled = true;
+                }
+            });
+        }
+
+        // Load stations by country
+        async function loadStationsByCountry(countryCode) {
+            showLoading(true);
+            try {
+                const endpoint = `/json/stations/bycountrycodeexact/${countryCode}?hidebroken=true&order=votes&reverse=true`;
+                countryStations = await fetchFromFastestServer(endpoint);
+                if (!countryStations.length) throw new Error('No stations found for this country');
+                populateLanguages(countryStations);
+                showError('');
+            } catch (error) {
+                showError(error.message, true);
+                document.getElementById('languageSelect').disabled = true;
+                document.getElementById('stationSelect').disabled = true;
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Populate language dropdown
+        function populateLanguages(stationList) {
+            const select = document.getElementById('languageSelect');
+            select.innerHTML = '<option value="">All Languages</option>';
+            const languageCounts = {};
+            stationList.forEach(station => {
+                if (station.language) {
+                    languageCounts[station.language] = (languageCounts[station.language] || 0) + 1;
+                }
+            });
+            const popularLanguages = Object.entries(languageCounts)
+                .filter(([_, count]) => count >= MIN_STATION_COUNT)
+                .map(([language]) => language)
+                .sort();
+            popularLanguages.forEach(language => {
+                const option = document.createElement('option');
+                option.value = language;
+                option.textContent = `${language} (${languageCounts[language]} stations)`;
+                select.appendChild(option);
+            });
+            select.addEventListener('change', (e) => {
+                const language = e.target.value;
+                filterStationsByLanguage(language);
+                document.getElementById('stationSelect').disabled = false;
+            });
+            filterStationsByLanguage('');
+        }
+
+        // Filter stations by language
+        function filterStationsByLanguage(language) {
+            if (language === '') {
+                stations = [...countryStations];
+            } else {
+                stations = countryStations.filter(station => station.language === language);
+            }
+            populateStations(stations);
+        }
+
+        // Populate station dropdown
+        function populateStations(stationList) {
+            const select = document.getElementById('stationSelect');
+            select.innerHTML = '<option value="">Select Station</option>';
+            stationList.forEach((station, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
+                select.appendChild(option);
+            });
+            select.addEventListener('change', (e) => {
+                const stationIndex = e.target.value;
+                if (stationIndex !== '') {
+                    playStation(stations[stationIndex]);
+                }
+            });
+        }
+
+        // Play station with improved error handling
+        async function playStation(station) {
+            showLoading(true);
+            clearError();
+            hasError = false;
+
+            try {
+                audio.pause();
+                audio.src = '';
+                audio.currentTime = 0;
+
+                let workingUrl = station.url_resolved || station.url;
+                if (!SKIP_STREAM_TEST) {
+                    const urlsToTry = [station.url_resolved, station.url, ...(station.url_alt || []).filter(url => url)].filter(url => url && url.startsWith('http'));
+                    for (const url of urlsToTry) {
+                        console.log('Testing URL:', url);
+                        if (await testStream(url)) {
+                            workingUrl = url;
+                            break;
+                        }
+                    }
+                    if (!workingUrl) {
+                        throw new Error('No working stream URL found');
+                    }
+                } else {
+                    console.log('Skipping stream test, using:', workingUrl);
+                }
+
+                console.log('Playing URL:', workingUrl);
+                audio.src = workingUrl;
+                audio.volume = document.getElementById('volume').value;
+
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => reject(new Error('Stream loading timed out')), 10000); // 10s timeout
+                    audio.addEventListener('canplay', () => {
+                        clearTimeout(timeout);
+                        resolve();
+                    }, { once: true });
+                    audio.addEventListener('error', () => {
+                        clearTimeout(timeout);
+                        reject(new Error('Failed to load stream'));
+                    }, { once: true });
+                    audio.load();
+                });
+
+                currentStation = station;
+                await audio.play().catch(err => {
+                    throw new Error(`Playback failed: ${err.message}`);
+                });
+                isPlaying = true;
+                updatePlayerDisplay();
+            } catch (error) {
+                console.error('Play error:', error);
+                hasError = true;
+                showError(`Failed to play ${station.name}: ${error.message}\nTry another station or check your connection`);
+                isPlaying = false;
+                currentStation = null;
+                updatePlayerDisplay();
+            } finally {
+                showLoading(false); // Ensure loading is hidden regardless of success or failure
+            }
+        }
+
+        // Improved stream testing
+        async function testStream(url) {
+            return new Promise((resolve) => {
+                const testAudio = new Audio();
+                testAudio.src = url;
+
+                const timeout = setTimeout(() => {
+                    testAudio.src = '';
+                    console.log('Stream test timed out after 5s:', url);
+                    resolve(false);
+                }, TEST_STREAM_TIMEOUT);
+
+                testAudio.addEventListener('canplaythrough', () => {
+                    clearTimeout(timeout);
+                    testAudio.src = '';
+                    console.log('Stream test successful:', url);
+                    resolve(true);
+                }, { once: true });
+
+                testAudio.addEventListener('error', () => {
+                    clearTimeout(timeout);
+                    console.log('Stream test failed:', url);
+                    resolve(false);
+                }, { once: true });
+
+                testAudio.load();
+            });
+        }
+
+        // Update player display
+        function updatePlayerDisplay() {
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const nowPlaying = document.getElementById('nowPlaying');
+            const span = nowPlaying.querySelector('span');
+            
+            playPauseBtn.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
+            playPauseBtn.disabled = !currentStation;
+            playPauseBtn.classList.toggle('active', isPlaying && currentStation);
+
+            if (currentStation) {
+                const text = `Now Playing: ${currentStation.name}${currentStation.bitrate ? ` (${currentStation.bitrate}kbps)` : ''}`;
+                span.textContent = text;
+                const isOverflowing = span.scrollWidth > nowPlaying.clientWidth;
+                nowPlaying.classList.toggle('overflowing', isOverflowing);
+                nowPlaying.classList.toggle('playing', isPlaying);
+            } else {
+                span.textContent = 'Select a station to play';
+                nowPlaying.classList.remove('playing', 'overflowing');
+            }
+        }
+
+        // Play/pause button handler
+        document.getElementById('playPauseBtn').addEventListener('click', async () => {
+            if (!currentStation) return;
+
+            try {
+                if (isPlaying) {
+                    audio.pause();
+                    isPlaying = false;
+                    console.log('Paused audio');
+                } else {
+                    if (!audio.src) {
+                        console.log('Audio source lost, reloading station');
+                        await playStation(currentStation);
+                    } else {
+                        audio.volume = document.getElementById('volume').value;
+                        await audio.play().catch(err => {
+                            throw new Error(`Resume failed: ${err.message}`);
+                        });
+                        isPlaying = true;
+                        console.log('Resumed audio');
+                    }
+                }
+                updatePlayerDisplay();
+            } catch (error) {
+                console.error('Play/pause error:', error);
+                hasError = true;
+                showError(`Playback error: ${error.message}`);
+                isPlaying = false;
+                updatePlayerDisplay();
+            }
+        });
+
+        // Volume control
+        document.getElementById('volume').addEventListener('input', (e) => {
+            const volume = parseFloat(e.target.value);
+            audio.volume = volume;
+            document.getElementById('volumeLevel').textContent = `${Math.round(volume * 100)}%`;
+        });
+
+        // Loading and error display functions
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        function showError(message, showRetry = false) {
+            const errorContainer = document.getElementById('errorContainer');
+            if (message && hasError) {
+                errorContainer.innerHTML = `
+                    <div class="error">${message}</div>
+                    ${showRetry ? `<button class="retry-button" onclick="retryAction()">Retry</button>` : ''}
+                `;
+            } else {
+                errorContainer.innerHTML = '';
+            }
+        }
+
+        function clearError() {
+            hasError = false;
+            document.getElementById('errorContainer').innerHTML = '';
+        }
+
+        // Retry action
+        function retryAction() {
+            if (!navigator.onLine) {
+                showError('No internet connection detected', true);
+                return;
+            }
+            if (!countryStations.length) {
+                fetchCountries();
+            } else if (currentStation) {
+                playStation(currentStation);
+            } else {
+                location.reload();
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('load', async () => {
+            if (!navigator.onLine) {
+                showError('No internet connection detected', true);
+                return;
+            }
+            await fetchCountries();
+        });
+
+        window.addEventListener('resize', updatePlayerDisplay);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && currentStation) {
+                e.preventDefault();
+                document.getElementById('playPauseBtn').click();
+            }
+        });
+    </script>
+</body>
+</html>
