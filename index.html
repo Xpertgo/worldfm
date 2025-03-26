@@ -331,16 +331,16 @@
     <script>
         const API_SERVERS = [
             'https://de2.api.radio-browser.info',
-            'https://nl1.api.radio-browser.info',
-            'https://at1.api.radio-browser.info'
+
         ];
         const MAX_RETRIES = 3;
-        const MIN_STATION_COUNT = 2;
+        const MIN_STATION_COUNT = 3;
         const TEST_STREAM_TIMEOUT = 5000;
-        const SKIP_STREAM_TEST = false;
+        const SKIP_STREAM_TEST = true; // Set to true to bypass stream testing if needed
         const BATCH_SIZE = 100;
         const HEARTBEAT_INTERVAL = 30000; // 30 seconds
-        const RECONNECT_DELAY = 2000; // 2 seconds
+        const RECONNECT_DELAY = 10000; // Increased to 5 seconds
+        const MAX_RECONNECT_ATTEMPTS = 10000; // Increased to 10 attempts
 
         const audio = new Audio();
         let currentStation = null;
@@ -350,7 +350,6 @@
         let stations = [];
         let heartbeatTimer = null;
         let reconnectAttempts = 0;
-        const MAX_RECONNECT_ATTEMPTS = 5;
 
         const LANGUAGE_NORMALIZATION = {
             'arabic': 'Arabic',
@@ -885,17 +884,40 @@
                 audio.currentTime = 0;
 
                 let workingUrl = station.url_resolved || station.url;
+                console.log('Initial URL:', workingUrl);
+
+                // Check if the URL is a playlist file (.m3u or .pls)
+                if (workingUrl.endsWith('.m3u') || workingUrl.endsWith('.pls')) {
+                    console.log('Detected playlist file, fetching and parsing:', workingUrl);
+                    const response = await fetch(workingUrl);
+                    if (!response.ok) throw new Error(`Failed to fetch playlist: ${response.statusText}`);
+                    const text = await response.text();
+                    const lines = text.split('\n');
+                    let foundStreamUrl = false;
+                    for (const line of lines) {
+                        if (line.trim().startsWith('http')) {
+                            workingUrl = line.trim();
+                            foundStreamUrl = true;
+                            console.log('Extracted stream URL from playlist:', workingUrl);
+                            break;
+                        }
+                    }
+                    if (!foundStreamUrl) throw new Error('No valid stream URL found in playlist file');
+                }
+
                 if (!SKIP_STREAM_TEST) {
-                    const urlsToTry = [station.url_resolved, station.url, ...(station.url_alt || []).filter(url => url)].filter(url => url && url.startsWith('http'));
+                    const urlsToTry = [workingUrl, ...(station.url_alt || []).filter(url => url)].filter(url => url && url.startsWith('http'));
+                    let streamTestPassed = false;
                     for (const url of urlsToTry) {
                         console.log('Testing URL:', url);
                         if (await testStream(url)) {
                             workingUrl = url;
+                            streamTestPassed = true;
                             break;
                         }
                     }
-                    if (!workingUrl) {
-                        throw new Error('No working stream URL found');
+                    if (!streamTestPassed) {
+                        throw new Error('No working stream URL found after testing');
                     }
                 }
 
@@ -909,9 +931,9 @@
                         clearTimeout(timeout);
                         resolve();
                     }, { once: true });
-                    audio.addEventListener('error', () => {
+                    audio.addEventListener('error', (e) => {
                         clearTimeout(timeout);
-                        reject(new Error('Failed to load stream'));
+                        reject(new Error(`Failed to load stream: ${e.message}`));
                     }, { once: true });
                     audio.load();
                 });
@@ -952,9 +974,9 @@
                     resolve(true);
                 }, { once: true });
 
-                testAudio.addEventListener('error', () => {
+                testAudio.addEventListener('error', (e) => {
                     clearTimeout(timeout);
-                    console.log('Stream test failed:', url);
+                    console.log('Stream test failed:', url, 'Error:', e.message);
                     resolve(false);
                 }, { once: true });
 
@@ -967,7 +989,6 @@
             heartbeatTimer = setInterval(async () => {
                 if (isPlaying && currentStation) {
                     try {
-                        // Check if audio is still playing by attempting a small fetch
                         const response = await fetch(audio.src, { method: 'HEAD', mode: 'no-cors' });
                         console.log('Heartbeat check successful');
                     } catch (error) {
@@ -996,16 +1017,37 @@
 
             reconnectAttempts++;
             console.log(`Reconnect attempt ${reconnectAttempts} of ${MAX_RECONNECT_ATTEMPTS}`);
-            
+
             try {
                 audio.pause();
                 audio.src = '';
                 await new Promise(resolve => setTimeout(resolve, RECONNECT_DELAY));
-                
+
                 let workingUrl = currentStation.url_resolved || currentStation.url;
+                console.log('Reconnect URL:', workingUrl);
+
+                // Check if the URL is a playlist file during reconnect
+                if (workingUrl.endsWith('.m3u') || workingUrl.endsWith('.pls')) {
+                    console.log('Detected playlist file during reconnect, fetching and parsing:', workingUrl);
+                    const response = await fetch(workingUrl);
+                    if (!response.ok) throw new Error(`Failed to fetch playlist: ${response.statusText}`);
+                    const text = await response.text();
+                    const lines = text.split('\n');
+                    let foundStreamUrl = false;
+                    for (const line of lines) {
+                        if (line.trim().startsWith('http')) {
+                            workingUrl = line.trim();
+                            foundStreamUrl = true;
+                            console.log('Extracted stream URL from playlist during reconnect:', workingUrl);
+                            break;
+                        }
+                    }
+                    if (!foundStreamUrl) throw new Error('No valid stream URL found in playlist file during reconnect');
+                }
+
                 audio.src = workingUrl;
                 audio.volume = document.getElementById('volume').value;
-                
+
                 await audio.play();
                 isPlaying = true;
                 hasError = false;
