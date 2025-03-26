@@ -80,6 +80,8 @@
             font-size: 1em;
             transition: all 0.3s ease;
             box-shadow: var(--shadow);
+            max-height: 300px;
+            overflow-y: auto;
         }
 
         select:focus {
@@ -293,8 +295,8 @@
         <div class="controls">
             <div class="control-group">
                 <label for="countrySelect">Country:</label>
-                <select id="countrySelect" disabled aria-label="Select Country">
-                    <option value="">Loading countries...</option>
+                <select id="countrySelect" aria-label="Select Country">
+                    <option value="">Select Country</option>
                 </select>
             </div>
             <div class="control-group">
@@ -306,7 +308,7 @@
             <div class="control-group">
                 <label for="stationSelect">Station:</label>
                 <select id="stationSelect" disabled aria-label="Select Station">
-                    <option value="">Select language first</option>
+                    <option value="">Loading stations...</option>
                 </select>
             </div>
         </div>
@@ -333,30 +335,285 @@
             'https://at1.api.radio-browser.info'
         ];
         const MAX_RETRIES = 3;
-        const MIN_STATION_COUNT = 5;
+        const MIN_STATION_COUNT = 2;
         const TEST_STREAM_TIMEOUT = 5000;
-        const SKIP_STREAM_TEST = false; // Set to true to skip stream testing for debugging
+        const SKIP_STREAM_TEST = false;
+        const BATCH_SIZE = 100;
+        const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+        const RECONNECT_DELAY = 2000; // 2 seconds
+
         const audio = new Audio();
         let currentStation = null;
         let isPlaying = false;
         let hasError = false;
         let countryStations = [];
         let stations = [];
+        let heartbeatTimer = null;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 5;
+
+        const LANGUAGE_NORMALIZATION = {
+            'arabic': 'Arabic',
+            'arabe': 'Arabic',
+            'العربية': 'Arabic',
+            'modern standard arabic': 'Arabic',
+            'egyptian arabic': 'Arabic',
+            'levantine arabic': 'Arabic',
+            'maghrebi arabic': 'Arabic',
+            'bengali': 'Bengali',
+            'bangla': 'Bengali',
+            'বাংলা': 'Bengali',
+            'bangla,bengali': 'Bengali',
+            'bengali,hindi': 'Bengali',
+            'bengali,english,hindi': 'Bengali',
+            'chinese': 'Chinese',
+            'mandarin': 'Chinese',
+            '中文': 'Chinese',
+            'zhongwen': 'Chinese',
+            'putonghua': 'Chinese',
+            'cantonese': 'Chinese',
+            'yue': 'Chinese',
+            'english': 'English',
+            'british english': 'English',
+            'american english': 'English',
+            'australian english': 'English',
+            'canadian english': 'English',
+            'english,spanish': 'English',
+            'english,hindi': 'Hindi',
+            'english,hindi,marathi': 'Hindi',
+            'english,hindi,punjabi': 'Hindi',
+            'english,hindi,urdu': 'Hindi',
+            'english,english hindi,hindi': 'Hindi',
+            'english,malayalam,tamil': 'Malayalam',
+            'english,kannada,malayalam,tamil,telugu,urdu': 'Kannada',
+            'english,online radio,tamil': 'Tamil',
+            'french': 'French',
+            'français': 'French',
+            'francais': 'French',
+            'quebec french': 'French',
+            'canadian french': 'French',
+            'german': 'German',
+            'deutsch': 'German',
+            'high german': 'German',
+            'swiss german': 'German',
+            'austrian german': 'German',
+            'hindi': 'Hindi',
+            'हिन्दी': 'Hindi',
+            'hindustani': 'Hindi',
+            'hindi,english': 'Hindi',
+            'hindi,english assamese': 'Hindi',
+            'hindi,indian': 'Hindi',
+            'hindi,kashmiri,urdu': 'Hindi',
+            'hindi,marathi': 'Hindi',
+            'hindi,marathi,sanskrit': 'Hindi',
+            'hindi,punjabi': 'Hindi',
+            'hindi,telugu': 'Hindi',
+            'hindi,english,hindi': 'Hindi',
+            'haryanvi': 'Hindi',
+            'haryanvi,hindi,punjabi': 'Hindi',
+            'chhattisgarhi,hindi': 'Hindi',
+            'bhojpuri': 'Hindi',
+            'classical,evergreens,hindi': 'Hindi',
+            'italian': 'Italian',
+            'italiano': 'Italian',
+            'japanese': 'Japanese',
+            '日本語': 'Japanese',
+            'nihongo': 'Japanese',
+            'korean': 'Korean',
+            '한국어': 'Korean',
+            'hanguk-eo': 'Korean',
+            '조선말': 'Korean',
+            'joseongeul': 'Korean',
+            'portuguese': 'Portuguese',
+            'português': 'Portuguese',
+            'portugues': 'Portuguese',
+            'brazilian portuguese': 'Portuguese',
+            'european portuguese': 'Portuguese',
+            'russian': 'Russian',
+            'русский': 'Russian',
+            'russkiy': 'Russian',
+            'spanish': 'Spanish',
+            'español': 'Spanish',
+            'espanol': 'Spanish',
+            'castilian': 'Spanish',
+            'castellano': 'Spanish',
+            'latin american spanish': 'Spanish',
+            'tamil': 'Tamil',
+            'தமிழ்': 'Tamil',
+            'telugu': 'Telugu',
+            'తెలుగు': 'Telugu',
+            'urdu': 'Urdu',
+            'اردو': 'Urdu',
+            'swahili': 'Swahili',
+            'kiswahili': 'Swahili',
+            'dutch': 'Dutch',
+            'nederlands': 'Dutch',
+            'flemish': 'Dutch',
+            'afrikaans': 'Afrikaans',
+            'turkish': 'Turkish',
+            'türkçe': 'Turkish',
+            'turkce': 'Turkish',
+            'polish': 'Polish',
+            'polski': 'Polish',
+            'vietnamese': 'Vietnamese',
+            'tiếng việt': 'Vietnamese',
+            'tieng viet': 'Vietnamese',
+            'thai': 'Thai',
+            'ไทย': 'Thai',
+            'phasa thai': 'Thai',
+            'greek': 'Greek',
+            'ελληνικά': 'Greek',
+            'ellinika': 'Greek',
+            'hebrew': 'Hebrew',
+            'עברית': 'Hebrew',
+            'ivrit': 'Hebrew',
+            'persian': 'Persian',
+            'farsi': 'Persian',
+            'پارسی': 'Persian',
+            'dari': 'Persian',
+            'malay': 'Malay',
+            'bahasa melayu': 'Malay',
+            'bahasa malaysia': 'Malay',
+            'indonesian': 'Indonesian',
+            'bahasa indonesia': 'Indonesian',
+            'filipino': 'Filipino',
+            'tagalog': 'Filipino',
+            'pilipino': 'Filipino',
+            'ukrainian': 'Ukrainian',
+            'українська': 'Ukrainian',
+            'ukrayinska': 'Ukrainian',
+            'czech': 'Czech',
+            'čeština': 'Czech',
+            'cestina': 'Czech',
+            'swedish': 'Swedish',
+            'svenska': 'Swedish',
+            'norwegian': 'Norwegian',
+            'norsk': 'Norwegian',
+            'bokmål': 'Norwegian',
+            'nynorsk': 'Norwegian',
+            'danish': 'Danish',
+            'dansk': 'Danish',
+            'finnish': 'Finnish',
+            'suomi': 'Finnish',
+            'hungarian': 'Hungarian',
+            'magyar': 'Hungarian',
+            'romanian': 'Romanian',
+            'română': 'Romanian',
+            'romana': 'Romanian',
+            'bulgarian': 'Bulgarian',
+            'български': 'Bulgarian',
+            'balgarski': 'Bulgarian',
+            'serbian': 'Serbian',
+            'српски': 'Serbian',
+            'srpski': 'Serbian',
+            'croatian': 'Croatian',
+            'hrvatski': 'Croatian',
+            'slovak': 'Slovak',
+            'slovenčina': 'Slovak',
+            'slovencina': 'Slovak',
+            'slovenian': 'Slovenian',
+            'slovenščina': 'Slovenian',
+            'slovenscina': 'Slovenian',
+            'assamese': 'Assamese',
+            'gujarati': 'Gujarati',
+            'gujarati,hindi': 'Gujarati',
+            'kannada': 'Kannada',
+            'malayalam': 'Malayalam',
+            'malayalam,ml': 'Malayalam',
+            'malayalam,tamil': 'Malayalam',
+            'marathi': 'Marathi',
+            'nepali': 'Nepali',
+            'odia': 'Odia',
+            'punjabi': 'Punjabi',
+            'sanskrit': 'Sanskrit',
+            'estonian': 'Estonian',
+            'dan': 'Dan'
+        };
+
+        const STATIC_COUNTRIES = [
+            { code: 'AF', name: 'Afghanistan' }, { code: 'AL', name: 'Albania' }, { code: 'DZ', name: 'Algeria' },
+            { code: 'AD', name: 'Andorra' }, { code: 'AO', name: 'Angola' }, { code: 'AG', name: 'Antigua and Barbuda' },
+            { code: 'AR', name: 'Argentina' }, { code: 'AM', name: 'Armenia' }, { code: 'AU', name: 'Australia' },
+            { code: 'AT', name: 'Austria' }, { code: 'AZ', name: 'Azerbaijan' }, { code: 'BS', name: 'Bahamas' },
+            { code: 'BH', name: 'Bahrain' }, { code: 'BD', name: 'Bangladesh' }, { code: 'BB', name: 'Barbados' },
+            { code: 'BY', name: 'Belarus' }, { code: 'BE', name: 'Belgium' }, { code: 'BZ', name: 'Belize' },
+            { code: 'BJ', name: 'Benin' }, { code: 'BT', name: 'Bhutan' }, { code: 'BO', name: 'Bolivia' },
+            { code: 'BA', name: 'Bosnia and Herzegovina' }, { code: 'BW', name: 'Botswana' }, { code: 'BR', name: 'Brazil' },
+            { code: 'BN', name: 'Brunei' }, { code: 'BG', name: 'Bulgaria' }, { code: 'BF', name: 'Burkina Faso' },
+            { code: 'BI', name: 'Burundi' }, { code: 'KH', name: 'Cambodia' }, { code: 'CM', name: 'Cameroon' },
+            { code: 'CA', name: 'Canada' }, { code: 'CV', name: 'Cape Verde' }, { code: 'CF', name: 'Central African Republic' },
+            { code: 'TD', name: 'Chad' }, { code: 'CL', name: 'Chile' }, { code: 'CN', name: 'China' },
+            { code: 'CO', name: 'Colombia' }, { code: 'KM', name: 'Comoros' }, { code: 'CG', name: 'Congo' },
+            { code: 'CD', name: 'Congo (DRC)' }, { code: 'CR', name: 'Costa Rica' }, { code: 'CI', name: "Côte d'Ivoire" },
+            { code: 'HR', name: 'Croatia' }, { code: 'CU', name: 'Cuba' }, { code: 'CY', name: 'Cyprus' },
+            { code: 'CZ', name: 'Czech Republic' }, { code: 'DK', name: 'Denmark' }, { code: 'DJ', name: 'Djibouti' },
+            { code: 'DM', name: 'Dominica' }, { code: 'DO', name: 'Dominican Republic' }, { code: 'EC', name: 'Ecuador' },
+            { code: 'EG', name: 'Egypt' }, { code: 'SV', name: 'El Salvador' }, { code: 'GQ', name: 'Equatorial Guinea' },
+            { code: 'ER', name: 'Eritrea' }, { code: 'EE', name: 'Estonia' }, { code: 'ET', name: 'Ethiopia' },
+            { code: 'FJ', name: 'Fiji' }, { code: 'FI', name: 'Finland' }, { code: 'FR', name: 'France' },
+            { code: 'GA', name: 'Gabon' }, { code: 'GM', name: 'Gambia' }, { code: 'GE', name: 'Georgia' },
+            { code: 'DE', name: 'Germany' }, { code: 'GH', name: 'Ghana' }, { code: 'GR', name: 'Greece' },
+            { code: 'GD', name: 'Grenada' }, { code: 'GT', name: 'Guatemala' }, { code: 'GN', name: 'Guinea' },
+            { code: 'GW', name: 'Guinea-Bissau' }, { code: 'GY', name: 'Guyana' }, { code: 'HT', name: 'Haiti' },
+            { code: 'HN', name: 'Honduras' }, { code: 'HU', name: 'Hungary' }, { code: 'IS', name: 'Iceland' },
+            { code: 'IN', name: 'India' }, { code: 'ID', name: 'Indonesia' }, { code: 'IR', name: 'Iran' },
+            { code: 'IQ', name: 'Iraq' }, { code: 'IE', name: 'Ireland' }, { code: 'IL', name: 'Israel' },
+            { code: 'IT', name: 'Italy' }, { code: 'JM', name: 'Jamaica' }, { code: 'JP', name: 'Japan' },
+            { code: 'JO', name: 'Jordan' }, { code: 'KZ', name: 'Kazakhstan' }, { code: 'KE', name: 'Kenya' },
+            { code: 'KI', name: 'Kiribati' }, { code: 'KP', name: 'North Korea' }, { code: 'KR', name: 'South Korea' },
+            { code: 'KW', name: 'Kuwait' }, { code: 'KG', name: 'Kyrgyzstan' }, { code: 'LA', name: 'Laos' },
+            { code: 'LV', name: 'Latvia' }, { code: 'LB', name: 'Lebanon' }, { code: 'LS', name: 'Lesotho' },
+            { code: 'LR', name: 'Liberia' }, { code: 'LY', name: 'Libya' }, { code: 'LI', name: 'Liechtenstein' },
+            { code: 'LT', name: 'Lithuania' }, { code: 'LU', name: 'Luxembourg' }, { code: 'MG', name: 'Madagascar' },
+            { code: 'MW', name: 'Malawi' }, { code: 'MY', name: 'Malaysia' }, { code: 'MV', name: 'Maldives' },
+            { code: 'ML', name: 'Mali' }, { code: 'MT', name: 'Malta' }, { code: 'MH', name: 'Marshall Islands' },
+            { code: 'MR', name: 'Mauritania' }, { code: 'MU', name: 'Mauritius' }, { code: 'MX', name: 'Mexico' },
+            { code: 'FM', name: 'Micronesia' }, { code: 'MD', name: 'Moldova' }, { code: 'MC', name: 'Monaco' },
+            { code: 'MN', name: 'Mongolia' }, { code: 'ME', name: 'Montenegro' }, { code: 'MA', name: 'Morocco' },
+            { code: 'MZ', name: 'Mozambique' }, { code: 'MM', name: 'Myanmar' }, { code: 'NA', name: 'Namibia' },
+            { code: 'NR', name: 'Nauru' }, { code: 'NP', name: 'Nepal' }, { code: 'NL', name: 'Netherlands' },
+            { code: 'NZ', name: 'New Zealand' }, { code: 'NI', name: 'Nicaragua' }, { code: 'NE', name: 'Niger' },
+            { code: 'NG', name: 'Nigeria' }, { code: 'NO', name: 'Norway' }, { code: 'OM', name: 'Oman' },
+            { code: 'PK', name: 'Pakistan' }, { code: 'PW', name: 'Palau' }, { code: 'PA', name: 'Panama' },
+            { code: 'PG', name: 'Papua New Guinea' }, { code: 'PY', name: 'Paraguay' }, { code: 'PE', name: 'Peru' },
+            { code: 'PH', name: 'Philippines' }, { code: 'PL', name: 'Poland' }, { code: 'PT', name: 'Portugal' },
+            { code: 'QA', name: 'Qatar' }, { code: 'RO', name: 'Romania' }, { code: 'RU', name: 'Russia' },
+            { code: 'RW', name: 'Rwanda' }, { code: 'KN', name: 'Saint Kitts and Nevis' }, { code: 'LC', name: 'Saint Lucia' },
+            { code: 'VC', name: 'Saint Vincent and the Grenadines' }, { code: 'WS', name: 'Samoa' }, { code: 'SM', name: 'San Marino' },
+            { code: 'ST', name: 'São Tomé and Príncipe' }, { code: 'SA', name: 'Saudi Arabia' }, { code: 'SN', name: 'Senegal' },
+            { code: 'RS', name: 'Serbia' }, { code: 'SC', name: 'Seychelles' }, { code: 'SL', name: 'Sierra Leone' },
+            { code: 'SG', name: 'Singapore' }, { code: 'SK', name: 'Slovakia' }, { code: 'SI', name: 'Slovenia' },
+            { code: 'SB', name: 'Solomon Islands' }, { code: 'SO', name: 'Somalia' }, { code: 'ZA', name: 'South Africa' },
+            { code: 'SS', name: 'South Sudan' }, { code: 'ES', name: 'Spain' }, { code: 'LK', name: 'Sri Lanka' },
+            { code: 'SD', name: 'Sudan' }, { code: 'SR', name: 'Suriname' }, { code: 'SZ', name: 'Eswatini' },
+            { code: 'SE', name: 'Sweden' }, { code: 'CH', name: 'Switzerland' }, { code: 'SY', name: 'Syria' },
+            { code: 'TJ', name: 'Tajikistan' }, { code: 'TZ', name: 'Tanzania' }, { code: 'TH', name: 'Thailand' },
+            { code: 'TL', name: 'Timor-Leste' }, { code: 'TG', name: 'Togo' }, { code: 'TO', name: 'Tonga' },
+            { code: 'TT', name: 'Trinidad and Tobago' }, { code: 'TN', name: 'Tunisia' }, { code: 'TR', name: 'Turkey' },
+            { code: 'TM', name: 'Turkmenistan' }, { code: 'TV', name: 'Tuvalu' }, { code: 'UG', name: 'Uganda' },
+            { code: 'UA', name: 'Ukraine' }, { code: 'AE', name: 'United Arab Emirates' }, { code: 'GB', name: 'United Kingdom' },
+            { code: 'US', name: 'United States' }, { code: 'UY', name: 'Uruguay' }, { code: 'UZ', name: 'Uzbekistan' },
+            { code: 'VU', name: 'Vanuatu' }, { code: 'VA', name: 'Vatican City' }, { code: 'VE', name: 'Venezuela' },
+            { code: 'VN', name: 'Vietnam' }, { code: 'YE', name: 'Yemen' }, { code: 'ZM', name: 'Zambia' },
+            { code: 'ZW', name: 'Zimbabwe' }
+        ];
 
         audio.autoplay = false;
         audio.preload = 'auto';
 
-        // Audio event listeners
         audio.addEventListener('playing', () => {
             isPlaying = true;
             hasError = false;
+            reconnectAttempts = 0;
             updatePlayerDisplay();
             clearError();
+            startHeartbeat();
             console.log('Audio is playing');
         });
 
         audio.addEventListener('pause', () => {
             isPlaying = false;
+            stopHeartbeat();
             updatePlayerDisplay();
             console.log('Audio paused');
         });
@@ -364,10 +621,12 @@
         audio.addEventListener('error', (e) => {
             hasError = true;
             console.error('Audio error:', e);
+            stopHeartbeat();
             if (!isPlaying) {
                 showError('Stream error: Station may be offline or incompatible');
             } else {
-                showError('Stream interrupted: Station may have gone offline');
+                showError('Stream interrupted: Attempting to reconnect...');
+                attemptReconnect();
             }
             updatePlayerDisplay();
         });
@@ -376,7 +635,20 @@
             console.log('Audio can play');
         });
 
-        // Fetch from fastest server
+        audio.addEventListener('stalled', () => {
+            console.log('Audio stalled');
+            if (isPlaying) {
+                attemptReconnect();
+            }
+        });
+
+        audio.addEventListener('ended', () => {
+            console.log('Audio stream ended');
+            if (isPlaying) {
+                attemptReconnect();
+            }
+        });
+
         async function fetchFromFastestServer(endpoint, retryCount = 0) {
             const fetchPromises = API_SERVERS.map(server =>
                 fetch(`${server}${endpoint}`).then(res => {
@@ -400,37 +672,100 @@
             }
         }
 
-        // Fetch countries
-        async function fetchCountries() {
+        async function getUserCountryCode() {
+            try {
+                const response = await fetch('https://ipapi.co/json/');
+                const data = await response.json();
+                console.log('User country detected:', data.country_code);
+                return data.country_code || 'IN';
+            } catch (error) {
+                console.error('Failed to detect user country:', error);
+                return 'IN';
+            }
+        }
+
+        async function initializeApp() {
             showLoading(true);
             try {
-                const countries = await fetchFromFastestServer('/json/countries');
-                if (!countries.length) throw new Error('No countries found');
-                populateCountries(countries);
+                populateCountryDropdown(STATIC_COUNTRIES);
+                const userCountryCode = await getUserCountryCode();
+                const countrySelect = document.getElementById('countrySelect');
+                const validCountry = STATIC_COUNTRIES.some(c => c.code === userCountryCode);
+                countrySelect.value = validCountry ? userCountryCode : 'IN';
+                console.log('Selected country:', countrySelect.value);
+                await fetchAndDisplayAllStations(countrySelect.value);
                 showError('');
             } catch (error) {
-                showError(`Failed to load countries: ${error.message}\nPlease check your internet connection`, true);
+                console.error('Initialization error:', error);
+                showError(`Failed to load data: ${error.message}\nPlease check your internet connection`, true);
             } finally {
                 showLoading(false);
             }
         }
 
-        // Populate country dropdown
-        function populateCountries(countries) {
-            const select = document.getElementById('countrySelect');
-            select.innerHTML = '<option value="">Select Country</option>';
-            countries.sort((a, b) => a.name.localeCompare(b.name)).forEach(country => {
+        async function fetchAndDisplayAllStations(countryCode) {
+            showLoading(true);
+            try {
+                const allStations = await fetchFromFastestServer(`/json/stations/bycountrycodeexact/${countryCode}?hidebroken=true&order=votes&reverse=true`);
+                if (!allStations.length) throw new Error(`No stations found for ${countryCode}`);
+                countryStations = allStations;
+                stations = allStations;
+                console.log('All stations fetched:', countryStations.length);
+
+                const stationSelect = document.getElementById('stationSelect');
+                stationSelect.innerHTML = '<option value="">Select Station</option>';
+                let index = 0;
+
+                const renderBatch = () => {
+                    const fragment = document.createDocumentFragment();
+                    const end = Math.min(index + BATCH_SIZE, stations.length);
+                    for (; index < end; index++) {
+                        const station = stations[index];
+                        const option = document.createElement('option');
+                        option.value = index;
+                        option.textContent = `${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
+                        fragment.appendChild(option);
+                    }
+                    stationSelect.appendChild(fragment);
+
+                    if (index < stations.length) {
+                        requestAnimationFrame(renderBatch);
+                    } else {
+                        stationSelect.disabled = false;
+                        console.log('All stations rendered:', stations.length);
+                        populateLanguageDropdown();
+                        showLoading(false);
+                    }
+                };
+
+                requestAnimationFrame(renderBatch);
+            } catch (error) {
+                console.error('Error fetching stations:', error);
+                showError(`Failed to load stations: ${error.message}`, true);
+                showLoading(false);
+            }
+        }
+
+        function populateCountryDropdown(countries) {
+            const countrySelect = document.getElementById('countrySelect');
+            countrySelect.innerHTML = '<option value="">Select Country</option>';
+            const fragment = document.createDocumentFragment();
+            countries.forEach(country => {
                 const option = document.createElement('option');
-                option.value = country.iso_3166_1;
+                option.value = country.code;
                 option.textContent = country.name;
-                select.appendChild(option);
+                fragment.appendChild(option);
             });
-            select.disabled = false;
-            select.addEventListener('change', async (e) => {
+            countrySelect.appendChild(fragment);
+            countrySelect.disabled = false;
+            console.log('Country dropdown populated instantly');
+
+            countrySelect.addEventListener('change', async (e) => {
                 const countryCode = e.target.value;
                 if (countryCode) {
-                    await loadStationsByCountry(countryCode);
+                    await fetchAndDisplayAllStations(countryCode);
                     document.getElementById('languageSelect').disabled = false;
+                    document.getElementById('stationSelect').disabled = false;
                 } else {
                     document.getElementById('languageSelect').innerHTML = '<option value="">Select country first</option>';
                     document.getElementById('languageSelect').disabled = true;
@@ -440,85 +775,109 @@
             });
         }
 
-        // Load stations by country
-        async function loadStationsByCountry(countryCode) {
-            showLoading(true);
-            try {
-                const endpoint = `/json/stations/bycountrycodeexact/${countryCode}?hidebroken=true&order=votes&reverse=true`;
-                countryStations = await fetchFromFastestServer(endpoint);
-                if (!countryStations.length) throw new Error('No stations found for this country');
-                populateLanguages(countryStations);
-                showError('');
-            } catch (error) {
-                showError(error.message, true);
-                document.getElementById('languageSelect').disabled = true;
-                document.getElementById('stationSelect').disabled = true;
-            } finally {
-                showLoading(false);
+        function normalizeLanguage(rawLanguage) {
+            if (!rawLanguage) return null;
+            const languages = rawLanguage.toLowerCase().trim().split(/[,;]/).map(lang => lang.trim());
+            const normalizedLanguages = languages.map(lang => LANGUAGE_NORMALIZATION[lang] || (lang ? lang.charAt(0).toUpperCase() + lang.slice(1) : ''));
+            const validLanguages = normalizedLanguages.filter(lang => lang);
+            
+            if (validLanguages.length === 0) return null;
+            
+            let primaryLanguage = validLanguages[0];
+            if (validLanguages.length > 1) {
+                if (primaryLanguage === 'English' && validLanguages[1] && !['US', 'GB', 'AU', 'CA'].includes(document.getElementById('countrySelect').value)) {
+                    primaryLanguage = validLanguages[1];
+                }
             }
+            
+            return primaryLanguage;
         }
 
-        // Populate language dropdown
-        function populateLanguages(stationList) {
-            const select = document.getElementById('languageSelect');
-            select.innerHTML = '<option value="">All Languages</option>';
+        function populateLanguageDropdown() {
+            const languageSelect = document.getElementById('languageSelect');
+            languageSelect.innerHTML = '<option value="">All Languages</option>';
             const languageCounts = {};
-            stationList.forEach(station => {
-                if (station.language) {
-                    languageCounts[station.language] = (languageCounts[station.language] || 0) + 1;
+            
+            countryStations.forEach(station => {
+                const normalized = normalizeLanguage(station.language);
+                if (normalized) {
+                    languageCounts[normalized] = (languageCounts[normalized] || 0) + 1;
                 }
             });
+
             const popularLanguages = Object.entries(languageCounts)
                 .filter(([_, count]) => count >= MIN_STATION_COUNT)
-                .map(([language]) => language)
-                .sort();
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([language]) => language);
+
             popularLanguages.forEach(language => {
                 const option = document.createElement('option');
                 option.value = language;
                 option.textContent = `${language} (${languageCounts[language]} stations)`;
-                select.appendChild(option);
+                languageSelect.appendChild(option);
             });
-            select.addEventListener('change', (e) => {
-                const language = e.target.value;
-                filterStationsByLanguage(language);
-                document.getElementById('stationSelect').disabled = false;
-            });
-            filterStationsByLanguage('');
-        }
 
-        // Filter stations by language
-        function filterStationsByLanguage(language) {
-            if (language === '') {
-                stations = [...countryStations];
-            } else {
-                stations = countryStations.filter(station => station.language === language);
+            languageSelect.disabled = false;
+            console.log('Languages populated:', popularLanguages.length);
+
+            if (!languageSelect.onchange) {
+                languageSelect.onchange = (e) => {
+                    const language = e.target.value;
+                    filterStationsByLanguage(language);
+                    document.getElementById('stationSelect').disabled = false;
+                };
             }
-            populateStations(stations);
         }
 
-        // Populate station dropdown
-        function populateStations(stationList) {
-            const select = document.getElementById('stationSelect');
-            select.innerHTML = '<option value="">Select Station</option>';
-            stationList.forEach((station, index) => {
-                const option = document.createElement('option');
-                option.value = index;
-                option.textContent = `${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
-                select.appendChild(option);
-            });
-            select.addEventListener('change', (e) => {
-                const stationIndex = e.target.value;
-                if (stationIndex !== '') {
-                    playStation(stations[stationIndex]);
+        function filterStationsByLanguage(language) {
+            const stationSelect = document.getElementById('stationSelect');
+            stations = language 
+                ? countryStations.filter(station => {
+                    const normalized = normalizeLanguage(station.language);
+                    return normalized === language;
+                }) 
+                : [...countryStations];
+            
+            console.log('Filtered stations:', stations.length);
+            stationSelect.innerHTML = '<option value="">Select Station</option>';
+            let index = 0;
+
+            const renderFilterBatch = () => {
+                const fragment = document.createDocumentFragment();
+                const end = Math.min(index + BATCH_SIZE, stations.length);
+                for (; index < end; index++) {
+                    const station = stations[index];
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.textContent = `${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
+                    fragment.appendChild(option);
                 }
-            });
+                stationSelect.appendChild(fragment);
+
+                if (index < stations.length) {
+                    requestAnimationFrame(renderFilterBatch);
+                } else {
+                    stationSelect.disabled = false;
+                    console.log('Filtered stations rendered:', stations.length);
+                }
+            };
+
+            requestAnimationFrame(renderFilterBatch);
         }
 
-        // Play station with improved error handling
+        document.getElementById('stationSelect').addEventListener('change', (e) => {
+            const stationIndex = e.target.value;
+            if (stationIndex !== '') {
+                stopHeartbeat();
+                playStation(stations[stationIndex]);
+            }
+        });
+
         async function playStation(station) {
             showLoading(true);
             clearError();
             hasError = false;
+            reconnectAttempts = 0;
 
             try {
                 audio.pause();
@@ -538,8 +897,6 @@
                     if (!workingUrl) {
                         throw new Error('No working stream URL found');
                     }
-                } else {
-                    console.log('Skipping stream test, using:', workingUrl);
                 }
 
                 console.log('Playing URL:', workingUrl);
@@ -547,7 +904,7 @@
                 audio.volume = document.getElementById('volume').value;
 
                 await new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => reject(new Error('Stream loading timed out')), 10000); // 10s timeout
+                    const timeout = setTimeout(() => reject(new Error('Stream loading timed out')), 10000);
                     audio.addEventListener('canplay', () => {
                         clearTimeout(timeout);
                         resolve();
@@ -573,11 +930,10 @@
                 currentStation = null;
                 updatePlayerDisplay();
             } finally {
-                showLoading(false); // Ensure loading is hidden regardless of success or failure
+                showLoading(false);
             }
         }
 
-        // Improved stream testing
         async function testStream(url) {
             return new Promise((resolve) => {
                 const testAudio = new Audio();
@@ -606,7 +962,64 @@
             });
         }
 
-        // Update player display
+        function startHeartbeat() {
+            stopHeartbeat();
+            heartbeatTimer = setInterval(async () => {
+                if (isPlaying && currentStation) {
+                    try {
+                        // Check if audio is still playing by attempting a small fetch
+                        const response = await fetch(audio.src, { method: 'HEAD', mode: 'no-cors' });
+                        console.log('Heartbeat check successful');
+                    } catch (error) {
+                        console.log('Heartbeat failed, attempting reconnect');
+                        attemptReconnect();
+                    }
+                }
+            }, HEARTBEAT_INTERVAL);
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatTimer) {
+                clearInterval(heartbeatTimer);
+                heartbeatTimer = null;
+            }
+        }
+
+        async function attemptReconnect() {
+            if (!currentStation || reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+                showError('Failed to reconnect after multiple attempts');
+                isPlaying = false;
+                updatePlayerDisplay();
+                stopHeartbeat();
+                return;
+            }
+
+            reconnectAttempts++;
+            console.log(`Reconnect attempt ${reconnectAttempts} of ${MAX_RECONNECT_ATTEMPTS}`);
+            
+            try {
+                audio.pause();
+                audio.src = '';
+                await new Promise(resolve => setTimeout(resolve, RECONNECT_DELAY));
+                
+                let workingUrl = currentStation.url_resolved || currentStation.url;
+                audio.src = workingUrl;
+                audio.volume = document.getElementById('volume').value;
+                
+                await audio.play();
+                isPlaying = true;
+                hasError = false;
+                reconnectAttempts = 0;
+                clearError();
+                updatePlayerDisplay();
+                startHeartbeat();
+                console.log('Reconnect successful');
+            } catch (error) {
+                console.error('Reconnect failed:', error);
+                setTimeout(attemptReconnect, RECONNECT_DELAY);
+            }
+        }
+
         function updatePlayerDisplay() {
             const playPauseBtn = document.getElementById('playPauseBtn');
             const nowPlaying = document.getElementById('nowPlaying');
@@ -628,7 +1041,6 @@
             }
         }
 
-        // Play/pause button handler
         document.getElementById('playPauseBtn').addEventListener('click', async () => {
             if (!currentStation) return;
 
@@ -636,6 +1048,7 @@
                 if (isPlaying) {
                     audio.pause();
                     isPlaying = false;
+                    stopHeartbeat();
                     console.log('Paused audio');
                 } else {
                     if (!audio.src) {
@@ -647,6 +1060,7 @@
                             throw new Error(`Resume failed: ${err.message}`);
                         });
                         isPlaying = true;
+                        startHeartbeat();
                         console.log('Resumed audio');
                     }
                 }
@@ -660,15 +1074,14 @@
             }
         });
 
-        // Volume control
         document.getElementById('volume').addEventListener('input', (e) => {
             const volume = parseFloat(e.target.value);
             audio.volume = volume;
             document.getElementById('volumeLevel').textContent = `${Math.round(volume * 100)}%`;
         });
 
-        // Loading and error display functions
         function showLoading(show) {
+            console.log('Loading set to:', show);
             document.getElementById('loading').style.display = show ? 'block' : 'none';
         }
 
@@ -689,14 +1102,13 @@
             document.getElementById('errorContainer').innerHTML = '';
         }
 
-        // Retry action
         function retryAction() {
             if (!navigator.onLine) {
                 showError('No internet connection detected', true);
                 return;
             }
             if (!countryStations.length) {
-                fetchCountries();
+                initializeApp();
             } else if (currentStation) {
                 playStation(currentStation);
             } else {
@@ -704,13 +1116,12 @@
             }
         }
 
-        // Initialize on load
         window.addEventListener('load', async () => {
             if (!navigator.onLine) {
                 showError('No internet connection detected', true);
                 return;
             }
-            await fetchCountries();
+            await initializeApp();
         });
 
         window.addEventListener('resize', updatePlayerDisplay);
@@ -719,6 +1130,17 @@
             if (e.code === 'Space' && currentStation) {
                 e.preventDefault();
                 document.getElementById('playPauseBtn').click();
+            }
+        });
+
+        window.addEventListener('offline', () => {
+            showError('Internet connection lost', true);
+            stopHeartbeat();
+        });
+
+        window.addEventListener('online', () => {
+            if (currentStation && !isPlaying) {
+                attemptReconnect();
             }
         });
     </script>
