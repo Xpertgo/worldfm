@@ -348,7 +348,7 @@
             'https://all.api.radio-browser.info'
         ];
         const MAX_RETRIES = 3;
-        const MIN_STATION_COUNT = 3;
+        const MIN_STATION_COUNT = 2;
         const TEST_STREAM_TIMEOUT = 5000;
         const SKIP_STREAM_TEST = true; // Set to true to bypass stream testing if needed
         const BATCH_SIZE = 100;
@@ -665,7 +665,7 @@
             }
         });
 
-        // Updated function to normalize station names for deduplication
+        // Function to normalize station names for deduplication
         function normalizeStationName(name) {
             if (!name) return '';
 
@@ -695,8 +695,8 @@
             return normalized.trim();
         }
 
-        // Updated function to deduplicate stations based on normalized names
-        function deduplicateStations(stations) {
+        // Function to deduplicate stations based on normalized names and URLs
+        function normalizeStations(stations) {
             const stationMap = new Map();
 
             stations.forEach(station => {
@@ -704,7 +704,6 @@
                 if (!normalizedName) return; // Skip stations with empty normalized names
 
                 // Create a unique key by combining normalized name and URL (if available)
-                // This ensures stations with the same name but different URLs are treated as distinct
                 const primaryUrl = station.url_resolved || station.url || '';
                 const key = `${normalizedName}|${primaryUrl}`;
 
@@ -739,7 +738,9 @@
                 }
             });
 
-            return Array.from(stationMap.values());
+            const normalized = Array.from(stationMap.values());
+            console.log(`Normalized stations: Reduced from ${stations.length} to ${normalized.length}`);
+            return normalized;
         }
 
         async function fetchFromFastestServer(endpoint, retryCount = 0) {
@@ -802,10 +803,10 @@
             try {
                 const allStations = await fetchFromFastestServer(`/json/stations/bycountrycodeexact/${countryCode}?hidebroken=true&order=votes&reverse=true`);
                 if (!allStations.length) throw new Error(`No stations found for ${countryCode}`);
-                // Deduplicate stations based on normalized names
-                countryStations = deduplicateStations(allStations);
+                // Normalize stations by merging duplicates
+                countryStations = normalizeStations(allStations);
                 stations = [...countryStations];
-                console.log('All stations fetched and deduplicated:', countryStations.length);
+                console.log('All stations fetched and normalized:', countryStations.length);
 
                 const stationSelect = document.getElementById('stationSelect');
                 stationSelect.innerHTML = '<option value="">Select Station</option>';
