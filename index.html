@@ -348,7 +348,7 @@
             'https://all.api.radio-browser.info'
         ];
         const MAX_RETRIES = 3;
-        const MIN_STATION_COUNT = 2;
+        const MIN_STATION_COUNT = 3;
         const TEST_STREAM_TIMEOUT = 5000;
         const SKIP_STREAM_TEST = true; // Set to true to bypass stream testing if needed
         const BATCH_SIZE = 100;
@@ -679,8 +679,18 @@
                 normalized = normalized.replace(prefixPattern, '');
             }
 
-            // Do NOT remove location suffixes to preserve unique stations
-            // e.g., "Akashvani Delhi" and "Akashvani Mumbai" should remain distinct
+            // Remove common location suffixes to merge stations like "Akashvani Maitree" and "AIR Akashvani Maitree Kolkata"
+            const locationSuffixes = [
+                'kolkata', 'delhi', 'mumbai', 'chennai', 'bangalore', 'hyderabad', 'pune', 'ahmedabad',
+                'jaipur', 'lucknow', 'patna', 'bhopal', 'indore', 'nagpur', 'kanpur', 'surat', 'vadodara',
+                'coimbatore', 'madurai', 'trivandrum', 'kochi', 'calicut', 'mysore', 'mangalore', 'goa',
+                'guwahati', 'shillong', 'imphal', 'agartala', 'aizawl', 'kohima', 'itanagar', 'gangtok',
+                'new delhi', 'north', 'south', 'east', 'west', 'central'
+            ];
+            for (const suffix of locationSuffixes) {
+                const suffixPattern = new RegExp(`\\s+${suffix}$`, 'i');
+                normalized = normalized.replace(suffixPattern, '');
+            }
 
             return normalized.trim();
         }
