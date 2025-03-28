@@ -344,16 +344,16 @@
 
     <script>
         const API_SERVERS = [
-            'https://de2.api.radio-browser.info',
-            'https://all.api.radio-browser.info'
+          'https://all.api.radio-browser.info'
         ];
         const MAX_RETRIES = 3;
-        const MIN_STATION_COUNT = 3;
+        const MIN_STATION_COUNT = 2;
         const TEST_STREAM_TIMEOUT = 5000;
         const SKIP_STREAM_TEST = true; // Set to true to bypass stream testing if needed
         const BATCH_SIZE = 100;
         const HEARTBEAT_INTERVAL = 30000; // 30 seconds
-        const BASE_RECONNECT_DELAY = 2000; // Start with 2 seconds
+        const BASE_RECONNECT_DELAY = 1000; // Start with 1 second
+        const DELAY_INCREMENT = 500; // Increase by 500ms per attempt
         const MAX_RECONNECT_DELAY = 10000; // Cap at 10 seconds
 
         const audio = new Audio();
@@ -620,6 +620,7 @@
             reconnectAttempts = 0;
             updatePlayerDisplay();
             clearError();
+            showLoading(false); // Hide loading when playing
             startHeartbeat();
             console.log('Audio is playing');
         });
@@ -637,6 +638,7 @@
             stopHeartbeat();
             if (!isPlaying) {
                 showError('Stream error: Station may be offline or incompatible');
+                showLoading(false);
             } else {
                 showError('Stream interrupted: Attempting to reconnect...');
                 attemptReconnect();
@@ -661,6 +663,76 @@
                 attemptReconnect();
             }
         });
+
+        // New function to normalize station names for deduplication
+        function normalizeStationName(name) {
+            if (!name) return '';
+
+            // Convert to lowercase and trim whitespace
+            let normalized = name.toLowerCase().trim();
+
+            // Remove common prefixes like "AIR"
+            const prefixes = ['air', 'all india radio'];
+            for (const prefix of prefixes) {
+                const prefixPattern = new RegExp(`^${prefix}\\s+`, 'i');
+                normalized = normalized.replace(prefixPattern, '');
+            }
+
+            // Remove common location suffixes (e.g., "Kolkata", "Delhi")
+            const locationSuffixes = [
+                'kolkata', 'delhi', 'mumbai', 'chennai', 'bangalore', 'hyderabad',
+                'pune', 'ahmedabad', 'jaipur', 'lucknow', 'kanpur', 'nagpur'
+            ];
+            for (const suffix of locationSuffixes) {
+                const suffixPattern = new RegExp(`\\s+${suffix}$`, 'i');
+                normalized = normalized.replace(suffixPattern, '');
+            }
+
+            // Trim again after removing prefixes and suffixes
+            return normalized.trim();
+        }
+
+        // New function to deduplicate stations based on normalized names
+        function deduplicateStations(stations) {
+            const stationMap = new Map();
+
+            stations.forEach(station => {
+                const normalizedName = normalizeStationName(station.name);
+                if (!normalizedName) return; // Skip stations with empty normalized names
+
+                if (stationMap.has(normalizedName)) {
+                    // Merge with existing station
+                    const existingStation = stationMap.get(normalizedName);
+
+                    // Keep the name with more details (e.g., prefer "AIR Akashvani Maitree Kolkata" over "Akashvani Maitree")
+                    if (station.name.length > existingStation.name.length) {
+                        existingStation.name = station.name;
+                    }
+
+                    // Use the highest bitrate
+                    if (station.bitrate && (!existingStation.bitrate || parseInt(station.bitrate) > parseInt(existingStation.bitrate))) {
+                        existingStation.bitrate = station.bitrate;
+                    }
+
+                    // Prefer url_resolved if available, otherwise keep the first valid URL
+                    if (station.url_resolved && (!existingStation.url_resolved || station.url_resolved !== existingStation.url_resolved)) {
+                        existingStation.url_resolved = station.url_resolved;
+                    } else if (station.url && !existingStation.url) {
+                        existingStation.url = station.url;
+                    }
+
+                    // Combine languages if different
+                    if (station.language && station.language !== existingStation.language) {
+                        existingStation.language = `${existingStation.language || ''}, ${station.language}`.trim();
+                    }
+                } else {
+                    // Add new station to the map
+                    stationMap.set(normalizedName, { ...station });
+                }
+            });
+
+            return Array.from(stationMap.values());
+        }
 
         async function fetchFromFastestServer(endpoint, retryCount = 0) {
             const fetchPromises = API_SERVERS.map(server =>
@@ -722,9 +794,10 @@
             try {
                 const allStations = await fetchFromFastestServer(`/json/stations/bycountrycodeexact/${countryCode}?hidebroken=true&order=votes&reverse=true`);
                 if (!allStations.length) throw new Error(`No stations found for ${countryCode}`);
-                countryStations = allStations;
-                stations = allStations;
-                console.log('All stations fetched:', countryStations.length);
+                // Deduplicate stations based on normalized names
+                countryStations = deduplicateStations(allStations);
+                stations = [...countryStations];
+                console.log('All stations fetched and deduplicated:', countryStations.length);
 
                 const stationSelect = document.getElementById('stationSelect');
                 stationSelect.innerHTML = '<option value="">Select Station</option>';
@@ -1035,6 +1108,7 @@
         async function attemptReconnect() {
             if (!currentStation) {
                 showError('No station selected to reconnect');
+                showLoading(false);
                 isPlaying = false;
                 updatePlayerDisplay();
                 stopHeartbeat();
@@ -1044,10 +1118,14 @@
             reconnectAttempts++;
             console.log(`Reconnect attempt ${reconnectAttempts}`);
 
-            // Progressive delay: start at BASE_RECONNECT_DELAY and increase by 1 second per attempt, capped at MAX_RECONNECT_DELAY
-            const delay = Math.min(BASE_RECONNECT_DELAY + (reconnectAttempts - 1) * 1000, MAX_RECONNECT_DELAY);
+            // Progressive delay: start at BASE_RECONNECT_DELAY and increase by DELAY_INCREMENT per attempt, capped at MAX_RECONNECT_DELAY
+            const delay = Math.min(BASE_RECONNECT_DELAY + (reconnectAttempts - 1) * DELAY_INCREMENT, MAX_RECONNECT_DELAY);
 
             try {
+                // Clear error and show loading indicator at the start of the reconnect attempt
+                clearError();
+                showLoading(true);
+
                 audio.pause();
                 audio.src = '';
                 await new Promise(resolve => setTimeout(resolve, delay));
