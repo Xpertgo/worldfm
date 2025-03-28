@@ -344,7 +344,7 @@
 
     <script>
         const API_SERVERS = [
-          'https://all.api.radio-browser.info'
+            'https://all.api.radio-browser.info'
         ];
         const MAX_RETRIES = 3;
         const MIN_STATION_COUNT = 2;
@@ -548,7 +548,7 @@
             { code: 'AD', name: 'Andorra' }, { code: 'AO', name: 'Angola' }, { code: 'AG', name: 'Antigua and Barbuda' },
             { code: 'AR', name: 'Argentina' }, { code: 'AM', name: 'Armenia' }, { code: 'AU', name: 'Australia' },
             { code: 'AT', name: 'Austria' }, { code: 'AZ', name: 'Azerbaijan' }, { code: 'BS', name: 'Bahamas' },
-            { code: 'BH', name: 'Bahrain' }, { code: 'BD', name: 'Bangladesh' }, { code: 'BB', name: 'Barbados' },
+            {禁止: 'Bahrain' }, { code: 'BH', name: 'Bahrain' }, { code: 'BD', name: 'Bangladesh' }, { code: 'BB', name: 'Barbados' },
             { code: 'BY', name: 'Belarus' }, { code: 'BE', name: 'Belgium' }, { code: 'BZ', name: 'Belize' },
             { code: 'BJ', name: 'Benin' }, { code: 'BT', name: 'Bhutan' }, { code: 'BO', name: 'Bolivia' },
             { code: 'BA', name: 'Bosnia and Herzegovina' }, { code: 'BW', name: 'Botswana' }, { code: 'BR', name: 'Brazil' },
@@ -664,35 +664,27 @@
             }
         });
 
-        // New function to normalize station names for deduplication
+        // Updated function to normalize station names for deduplication
         function normalizeStationName(name) {
             if (!name) return '';
 
             // Convert to lowercase and trim whitespace
             let normalized = name.toLowerCase().trim();
 
-            // Remove common prefixes like "AIR"
+            // Remove common prefixes like "AIR" or "All India Radio"
             const prefixes = ['air', 'all india radio'];
             for (const prefix of prefixes) {
                 const prefixPattern = new RegExp(`^${prefix}\\s+`, 'i');
                 normalized = normalized.replace(prefixPattern, '');
             }
 
-            // Remove common location suffixes (e.g., "Kolkata", "Delhi")
-            const locationSuffixes = [
-                'kolkata', 'delhi', 'mumbai', 'chennai', 'bangalore', 'hyderabad',
-                'pune', 'ahmedabad', 'jaipur', 'lucknow', 'kanpur', 'nagpur'
-            ];
-            for (const suffix of locationSuffixes) {
-                const suffixPattern = new RegExp(`\\s+${suffix}$`, 'i');
-                normalized = normalized.replace(suffixPattern, '');
-            }
+            // Do NOT remove location suffixes to preserve unique stations
+            // e.g., "Akashvani Delhi" and "Akashvani Mumbai" should remain distinct
 
-            // Trim again after removing prefixes and suffixes
             return normalized.trim();
         }
 
-        // New function to deduplicate stations based on normalized names
+        // Updated function to deduplicate stations based on normalized names
         function deduplicateStations(stations) {
             const stationMap = new Map();
 
@@ -700,9 +692,14 @@
                 const normalizedName = normalizeStationName(station.name);
                 if (!normalizedName) return; // Skip stations with empty normalized names
 
-                if (stationMap.has(normalizedName)) {
+                // Create a unique key by combining normalized name and URL (if available)
+                // This ensures stations with the same name but different URLs are treated as distinct
+                const primaryUrl = station.url_resolved || station.url || '';
+                const key = `${normalizedName}|${primaryUrl}`;
+
+                if (stationMap.has(key)) {
                     // Merge with existing station
-                    const existingStation = stationMap.get(normalizedName);
+                    const existingStation = stationMap.get(key);
 
                     // Keep the name with more details (e.g., prefer "AIR Akashvani Maitree Kolkata" over "Akashvani Maitree")
                     if (station.name.length > existingStation.name.length) {
@@ -727,7 +724,7 @@
                     }
                 } else {
                     // Add new station to the map
-                    stationMap.set(normalizedName, { ...station });
+                    stationMap.set(key, { ...station });
                 }
             });
 
