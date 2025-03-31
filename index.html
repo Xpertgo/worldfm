@@ -746,16 +746,17 @@
             showLoading(true);
 
             try {
-                // Populate country dropdown first, regardless of network status
+                // Populate country dropdown immediately, no network dependency
                 console.log('Populating country dropdown...');
+                const countrySelect = document.getElementById('countrySelect');
+                if (!countrySelect) {
+                    throw new Error('Country select element not found in DOM');
+                }
                 populateCountryDropdown(STATIC_COUNTRIES);
                 console.log('Country dropdown populated with', STATIC_COUNTRIES.length, 'countries');
 
                 // Attempt to get user's country code with fallback
                 const userCountryCode = await getUserCountryCode();
-                const countrySelect = document.getElementById('countrySelect');
-                if (!countrySelect) throw new Error('Country select element not found');
-
                 const validCountry = STATIC_COUNTRIES.some(c => c.code === userCountryCode);
                 const selectedCountry = validCountry ? userCountryCode : 'IN';
                 countrySelect.value = selectedCountry;
@@ -763,13 +764,13 @@
 
                 updateFlagDisplay(selectedCountry);
 
-                // Fetch stations for the selected country
+                // Fetch stations for the selected country (this can fail without affecting countries)
                 await fetchAndDisplayAllStations(selectedCountry);
                 showError('');
             } catch (error) {
                 console.error('Initialization error:', error);
-                showError(`Can't load the app.\nCheck your internet and try again.`, true);
-                // Ensure country dropdown remains populated even if station fetch fails
+                showError(`Can't load stations.\nCountries should still be available below.\nCheck your internet and press retry.`, true);
+                // Ensure country dropdown is populated even if other steps fail
                 if (!document.getElementById('countrySelect').children.length) {
                     populateCountryDropdown(STATIC_COUNTRIES);
                 }
@@ -871,8 +872,8 @@
         function populateCountryDropdown(countries) {
             const countrySelect = document.getElementById('countrySelect');
             if (!countrySelect) {
-                console.error('Country select element not found');
-                showError(`App error: Country list missing.\nPlease refresh the page.`, true);
+                console.error('Country select element not found in DOM');
+                showError(`App error: Country list not found.\nPlease refresh the page.`, true);
                 return;
             }
             countrySelect.innerHTML = '<option value="">Select Country</option>';
@@ -888,22 +889,26 @@
             countrySelect.disabled = false;
             console.log('Country dropdown populated with', countries.length, 'countries');
 
-            countrySelect.addEventListener('change', async (e) => {
-                const countryCode = e.target.value;
-                updateFlagDisplay(countryCode);
-                if (countryCode) {
-                    clearError();
-                    await fetchAndDisplayAllStations(countryCode);
-                    document.getElementById('languageSelect').disabled = false;
-                    document.getElementById('stationSelect').disabled = false;
-                } else {
-                    clearError();
-                    document.getElementById('languageSelect').innerHTML = '<option value="">Select country first</option>';
-                    document.getElementById('languageSelect').disabled = true;
-                    document.getElementById('stationSelect').innerHTML = '<option value="">Select language first</option>';
-                    document.getElementById('stationSelect').disabled = true;
-                }
-            });
+            // Ensure event listener is only added once
+            if (!countrySelect.dataset.listenerAdded) {
+                countrySelect.addEventListener('change', async (e) => {
+                    const countryCode = e.target.value;
+                    updateFlagDisplay(countryCode);
+                    if (countryCode) {
+                        clearError();
+                        await fetchAndDisplayAllStations(countryCode);
+                        document.getElementById('languageSelect').disabled = false;
+                        document.getElementById('stationSelect').disabled = false;
+                    } else {
+                        clearError();
+                        document.getElementById('languageSelect').innerHTML = '<option value="">Select country first</option>';
+                        document.getElementById('languageSelect').disabled = true;
+                        document.getElementById('stationSelect').innerHTML = '<option value="">Select language first</option>';
+                        document.getElementById('stationSelect').disabled = true;
+                    }
+                });
+                countrySelect.dataset.listenerAdded = 'true';
+            }
         }
 
         function updateFlagDisplay(countryCode) {
@@ -1049,7 +1054,7 @@
                 }
 
                 if (!SKIP_STREAM_TEST) {
-                    const urlsToTry = [workingUrl, ...(station.url_alt || []).filter(url => url)].filter(url => url && url.startsWith('http');
+                    const urlsToTry = [workingUrl, ...(station.url_alt || []).filter(url => url)].filter(url => url && url.startsWith('http'));
                     let streamTestPassed = false;
                     for (const url of urlsToTry) {
                         console.log('Testing URL:', url);
@@ -1215,7 +1220,7 @@
                 }
 
                 if (!SKIP_STREAM_TEST) {
-                    const urlsToTry = [workingUrl, ...(currentStation.url_alt || []).filter(url => url)].filter(url => url && url.startsWith('http');
+                    const urlsToTry = [workingUrl, ...(currentStation.url_alt || []).filter(url => url)].filter(url => url && url.startsWith('http'));
                     let streamTestPassed = false;
                     for (const url of urlsToTry) {
                         console.log('Testing URL during reconnect:', url);
@@ -1433,7 +1438,7 @@
                 }
             } catch (error) {
                 console.error('Retry failed:', error);
-                showError(`Retry failed.\nCheck your connection or try another station.`, true);
+                showError(`Retry failed.\nCheck your connection or try again.`, true);
             } finally {
                 isRetrying = false;
                 updateRetryButtonState();
