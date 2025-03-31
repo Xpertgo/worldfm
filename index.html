@@ -3,9 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0d1b2a">
     <title>World FM Radio</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Link to the manifest.json for PWA -->
+    <link rel="manifest" href="/manifest.json">
+    <!-- Preload Poppins font for faster loading -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" as="style" onload="this.rel='stylesheet'">
+    <noscript>
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    </noscript>
     <style>
         :root {
             --primary: #00b4d8;
@@ -80,8 +88,7 @@
             font-size: 1em;
             transition: all 0.3s ease;
             box-shadow: var(--shadow);
-            max-height: 300px;
-            overflow-y: auto;
+            box-sizing: border-box;
         }
 
         select:focus {
@@ -152,15 +159,29 @@
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             display: flex;
-            gap: 15px;
+            gap: 20px;
             align-items: center;
             box-shadow: var(--shadow);
             transition: all 0.3s ease;
             z-index: 1000;
         }
 
-        .player.expanded {
-            padding: 20px;
+        .player.connecting {
+            border-color: var(--primary);
+            animation: connecting 1.5s infinite;
+        }
+
+        @keyframes connecting {
+            0% { box-shadow: 0 0 5px rgba(0, 180, 216, 0.3); }
+            50% { box-shadow: 0 0 15px rgba(0, 180, 216, 0.7); }
+            100% { box-shadow: 0 0 5px rgba(0, 180, 216, 0.3); }
+        }
+
+        .player-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
         }
 
         .now-playing {
@@ -221,6 +242,13 @@
             box-shadow: var(--shadow);
         }
 
+        .error-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
         .error {
             color: #ff6b6b;
             margin: 15px 0;
@@ -232,8 +260,50 @@
         }
 
         .retry-button {
-            background: linear-gradient(45deg, #4CAF50, #66BB6A);
-            margin-left: 10px;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            color: var(--text-light);
+            font-family: 'Poppins', sans-serif;
+            font-size: 1em;
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .retry-button:hover:not(:disabled) {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(0, 180, 216, 0.7);
+        }
+
+        .retry-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .retry-button.active {
+            animation: pulse 1.5s infinite;
+        }
+
+        .retry-button .spinner {
+            display: none;
+            font-size: 0.9em;
+        }
+
+        .retry-button.loading .spinner {
+            display: inline-block;
+        }
+
+        .retry-button.loading .retry-text {
+            display: none;
         }
 
         .volume-control {
@@ -277,7 +347,12 @@
                 bottom: 10px;
                 left: 10px;
                 right: 10px;
-                gap: 10px;
+                gap: 15px;
+                align-items: center;
+            }
+            .player-controls {
+                flex-wrap: wrap;
+                justify-content: center;
             }
             .now-playing {
                 text-align: center;
@@ -298,6 +373,10 @@
             }
             #volume {
                 width: 80%;
+            }
+            .retry-button {
+                padding: 8px 16px;
+                font-size: 0.9em;
             }
         }
     </style>
@@ -334,28 +413,40 @@
 
         <div class="player">
             <div class="now-playing" id="nowPlaying"><span>Select a station to play</span></div>
-            <button id="playPauseBtn" disabled aria-label="Play/Pause"><i class="fas fa-play"></i></button>
+            <div class="player-controls">
+                <button id="previousBtn" disabled aria-label="Previous Station"><i class="fas fa-step-backward"></i></button>
+                <button id="playPauseBtn" disabled aria-label="Play/Pause"><i class="fas fa-play"></i></button>
+                <button id="stopBtn" disabled aria-label="Stop"><i class="fas fa-stop"></i></button>
+                <button id="nextBtn" disabled aria-label="Next Station"><i class="fas fa-step-forward"></i></button>
+            </div>
             <div class="volume-control">
+                <button id="muteBtn" aria-label="Mute/Unmute"><i class="fas fa-volume-up"></i></button>
                 <input type="range" id="volume" min="0" max="1" step="0.01" value="1" aria-label="Volume">
                 <span id="volumeLevel">100%</span>
             </div>
         </div>
     </div>
 
+    <!-- Load Font Awesome JavaScript with defer to avoid render-blocking -->
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
+
     <script>
         const API_SERVERS = [
-            'https://de2.api.radio-browser.info',
-            'https://all.api.radio-browser.info'
+            'http://all.api.radio-browser.info',
+            'http://fi1.api.radio-browser.info',
+            'http://de2.api.radio-browser.info'
         ];
         const MAX_RETRIES = 3;
-        const MIN_STATION_COUNT = 2;
-        const TEST_STREAM_TIMEOUT = 5000;
-        const SKIP_STREAM_TEST = true; // Set to true to bypass stream testing if needed
+        const MIN_STATION_COUNT = 1;
+        const TEST_STREAM_TIMEOUT = 2000;
+        const SKIP_STREAM_TEST = true;
         const BATCH_SIZE = 100;
-        const HEARTBEAT_INTERVAL = 30000; // 30 seconds
-        const BASE_RECONNECT_DELAY = 1000; // Start with 1 second
-        const DELAY_INCREMENT = 500; // Increase by 500ms per attempt
-        const MAX_RECONNECT_DELAY = 10000; // Cap at 10 seconds
+        const HEARTBEAT_INTERVAL = 60000;
+        const BASE_RECONNECT_DELAY = 500;
+        const DELAY_INCREMENT = 500;
+        const MAX_RECONNECT_DELAY = 10000;
+        const CACHE_KEY = 'world_fm_radio_stations';
+        const CACHE_DURATION = 60 * 60 * 1000;
 
         const audio = new Audio();
         let currentStation = null;
@@ -365,183 +456,57 @@
         let stations = [];
         let heartbeatTimer = null;
         let reconnectAttempts = 0;
+        let isRetrying = false;
+        let lastError = { message: null, showRetry: false };
 
         const LANGUAGE_NORMALIZATION = {
-            'arabic': 'Arabic',
-            'arabe': 'Arabic',
-            'العربية': 'Arabic',
-            'modern standard arabic': 'Arabic',
-            'egyptian arabic': 'Arabic',
-            'levantine arabic': 'Arabic',
-            'maghrebi arabic': 'Arabic',
-            'bengali': 'Bengali',
-            'bangla': 'Bengali',
-            'বাংলা': 'Bengali',
-            'bangla,bengali': 'Bengali',
-            'bengali,hindi': 'Bengali',
-            'bengali,english,hindi': 'Bengali',
-            'chinese': 'Chinese',
-            'mandarin': 'Chinese',
-            '中文': 'Chinese',
-            'zhongwen': 'Chinese',
-            'putonghua': 'Chinese',
-            'cantonese': 'Chinese',
-            'yue': 'Chinese',
-            'english': 'English',
-            'british english': 'English',
-            'american english': 'English',
-            'australian english': 'English',
-            'canadian english': 'English',
-            'english,spanish': 'English',
-            'english,hindi': 'Hindi',
-            'english,hindi,marathi': 'Hindi',
-            'english,hindi,punjabi': 'Hindi',
-            'english,hindi,urdu': 'Hindi',
-            'english,english hindi,hindi': 'Hindi',
-            'english,malayalam,tamil': 'Malayalam',
-            'english,kannada,malayalam,tamil,telugu,urdu': 'Kannada',
-            'english,online radio,tamil': 'Tamil',
-            'french': 'French',
-            'français': 'French',
-            'francais': 'French',
-            'quebec french': 'French',
-            'canadian french': 'French',
-            'german': 'German',
-            'deutsch': 'German',
-            'high german': 'German',
-            'swiss german': 'German',
-            'austrian german': 'German',
-            'hindi': 'Hindi',
-            'हिन्दी': 'Hindi',
-            'hindustani': 'Hindi',
-            'hindi,english': 'Hindi',
-            'hindi,english assamese': 'Hindi',
-            'hindi,indian': 'Hindi',
-            'hindi,kashmiri,urdu': 'Hindi',
-            'hindi,marathi': 'Hindi',
-            'hindi,marathi,sanskrit': 'Hindi',
-            'hindi,punjabi': 'Hindi',
-            'hindi,telugu': 'Hindi',
-            'hindi,english,hindi': 'Hindi',
-            'haryanvi': 'Hindi',
-            'haryanvi,hindi,punjabi': 'Hindi',
-            'chhattisgarhi,hindi': 'Hindi',
-            'bhojpuri': 'Hindi',
-            'classical,evergreens,hindi': 'Hindi',
-            'italian': 'Italian',
-            'italiano': 'Italian',
-            'japanese': 'Japanese',
-            '日本語': 'Japanese',
-            'nihongo': 'Japanese',
-            'korean': 'Korean',
-            '한국어': 'Korean',
-            'hanguk-eo': 'Korean',
-            '조선말': 'Korean',
-            'joseongeul': 'Korean',
-            'portuguese': 'Portuguese',
-            'português': 'Portuguese',
-            'portugues': 'Portuguese',
-            'brazilian portuguese': 'Portuguese',
-            'european portuguese': 'Portuguese',
-            'russian': 'Russian',
-            'русский': 'Russian',
-            'russkiy': 'Russian',
-            'spanish': 'Spanish',
-            'español': 'Spanish',
-            'espanol': 'Spanish',
-            'castilian': 'Spanish',
-            'castellano': 'Spanish',
-            'latin american spanish': 'Spanish',
-            'tamil': 'Tamil',
-            'தமிழ்': 'Tamil',
-            'telugu': 'Telugu',
-            'తెలుగు': 'Telugu',
-            'urdu': 'Urdu',
-            'اردو': 'Urdu',
-            'swahili': 'Swahili',
-            'kiswahili': 'Swahili',
-            'dutch': 'Dutch',
-            'nederlands': 'Dutch',
-            'flemish': 'Dutch',
-            'afrikaans': 'Afrikaans',
-            'turkish': 'Turkish',
-            'türkçe': 'Turkish',
-            'turkce': 'Turkish',
-            'polish': 'Polish',
-            'polski': 'Polish',
-            'vietnamese': 'Vietnamese',
-            'tiếng việt': 'Vietnamese',
-            'tieng viet': 'Vietnamese',
-            'thai': 'Thai',
-            'ไทย': 'Thai',
-            'phasa thai': 'Thai',
-            'greek': 'Greek',
-            'ελληνικά': 'Greek',
-            'ellinika': 'Greek',
-            'hebrew': 'Hebrew',
-            'עברית': 'Hebrew',
-            'ivrit': 'Hebrew',
-            'persian': 'Persian',
-            'farsi': 'Persian',
-            'پارسی': 'Persian',
-            'dari': 'Persian',
-            'malay': 'Malay',
-            'bahasa melayu': 'Malay',
-            'bahasa malaysia': 'Malay',
-            'indonesian': 'Indonesian',
-            'bahasa indonesia': 'Indonesian',
-            'filipino': 'Filipino',
-            'tagalog': 'Filipino',
-            'pilipino': 'Filipino',
-            'ukrainian': 'Ukrainian',
-            'українська': 'Ukrainian',
-            'ukrayinska': 'Ukrainian',
-            'czech': 'Czech',
-            'čeština': 'Czech',
-            'cestina': 'Czech',
-            'swedish': 'Swedish',
-            'svenska': 'Swedish',
-            'norwegian': 'Norwegian',
-            'norsk': 'Norwegian',
-            'bokmål': 'Norwegian',
-            'nynorsk': 'Norwegian',
-            'danish': 'Danish',
-            'dansk': 'Danish',
-            'finnish': 'Finnish',
-            'suomi': 'Finnish',
-            'hungarian': 'Hungarian',
-            'magyar': 'Hungarian',
-            'romanian': 'Romanian',
-            'română': 'Romanian',
-            'romana': 'Romanian',
-            'bulgarian': 'Bulgarian',
-            'български': 'Bulgarian',
-            'balgarski': 'Bulgarian',
-            'serbian': 'Serbian',
-            'српски': 'Serbian',
-            'srpski': 'Serbian',
-            'croatian': 'Croatian',
-            'hrvatski': 'Croatian',
-            'slovak': 'Slovak',
-            'slovenčina': 'Slovak',
-            'slovencina': 'Slovak',
-            'slovenian': 'Slovenian',
-            'slovenščina': 'Slovenian',
-            'slovenscina': 'Slovenian',
-            'assamese': 'Assamese',
-            'gujarati': 'Gujarati',
-            'gujarati,hindi': 'Gujarati',
-            'kannada': 'Kannada',
-            'malayalam': 'Malayalam',
-            'malayalam,ml': 'Malayalam',
-            'malayalam,tamil': 'Malayalam',
-            'marathi': 'Marathi',
-            'nepali': 'Nepali',
-            'odia': 'Odia',
-            'punjabi': 'Punjabi',
-            'sanskrit': 'Sanskrit',
-            'estonian': 'Estonian',
-            'dan': 'Dan'
+            'arabic': 'Arabic', 'arabe': 'Arabic', 'العربية': 'Arabic', 'modern standard arabic': 'Arabic',
+            'egyptian arabic': 'Arabic', 'levantine arabic': 'Arabic', 'maghrebi arabic': 'Arabic',
+            'bengali': 'Bengali', 'bangla': 'Bengali', 'বাংলা': 'Bengali', 'bangla,bengali': 'Bengali',
+            'bengali,hindi': 'Bengali', 'bengali,english,hindi': 'Bengali', 'chinese': 'Chinese',
+            'mandarin': 'Chinese', '中文': 'Chinese', 'zhongwen': 'Chinese', 'putonghua': 'Chinese',
+            'cantonese': 'Chinese', 'yue': 'Chinese', 'english': 'English', 'british english': 'English',
+            'american english': 'English', 'australian english': 'English', 'canadian english': 'English',
+            'english,spanish': 'English', 'english,hindi': 'Hindi', 'english,hindi,marathi': 'Hindi',
+            'english,hindi,punjabi': 'Hindi', 'english hindi':'Hindi', 'english,hindi,urdu': 'Hindi', 
+            'english,english hindi,hindi': 'Hindi', 'english,malayalam,tamil': 'Malayalam', 
+            'english,kannada,malayalam,tamil,telugu,urdu': 'Kannada', 'english,online radio,tamil': 'Tamil', 
+            'french': 'French', 'français': 'French', 'francais': 'French', 'quebec french': 'French', 
+            'canadian french': 'French', 'german': 'German', 'deutsch': 'German', 'high german': 'German', 
+            'swiss german': 'German', 'austrian german': 'German', 'hindi': 'Hindi', 'हिन्दी': 'Hindi', 
+            'hindustani': 'Hindi', 'hindi,english': 'Hindi', 'hindi,english assamese': 'Hindi', 
+            'hindi,indian': 'Hindi', 'hindi,kashmiri,urdu': 'Hindi', 'hindi,marathi': 'Hindi', 
+            'hindi,marathi,sanskrit': 'Hindi', 'hindi,punjabi': 'Hindi', 'hindi,telugu': 'Hindi', 
+            'hindi,english,hindi': 'Hindi', 'haryanvi': 'Hindi', 'haryanvi,hindi,punjabi': 'Hindi', 
+            'chhattisgarhi,hindi': 'Hindi', 'bhojpuri': 'Hindi', 'classical,evergreens,hindi': 'Hindi',
+            'italian': 'Italian', 'italiano': 'Italian', 'japanese': 'Japanese', '日本語': 'Japanese',
+            'nihongo': 'Japanese', 'korean': 'Korean', '한국어': 'Korean', 'hanguk-eo': 'Korean',
+            '조선말': 'Korean', 'joseongeul': 'Korean', 'portuguese': 'Portuguese', 'português': 'Portuguese',
+            'portugues': 'Portuguese', 'brazilian portuguese': 'Portuguese', 'european portugestrian': 'Portuguese',
+            'russian': 'Russian', 'русский': 'Russian', 'russkiy': 'Russian', 'spanish': 'Spanish',
+            'español': 'Spanish', 'castilian': 'Spanish', 'castellano': 'Spanish', 'latin american spanish': 'Spanish',
+            'tamil': 'Tamil', 'தமிழ்': 'Tamil', 'telugu': 'Telugu', 'తెలుగు': 'Telugu', 'urdu': 'Urdu', 
+            'اردو': 'Urdu', 'swahili': 'Swahili', 'kiswahili': 'Swahili', 'dutch': 'Dutch', 'nederlands': 'Dutch', 
+            'flemish': 'Dutch', 'afrikaans': 'Afrikaans', 'turkish': 'Turkish', 'türkçe': 'Turkish', 
+            'turkce': 'Turkish', 'polish': 'Polish', 'polski': 'Polish', 'vietnamese': 'Vietnamese', 
+            'tiếng việt': 'Vietnamese', 'tieng viet': 'Vietnamese', 'thai': 'Thai', 'ไทย': 'Thai', 
+            'phasa thai': 'Thai', 'greek': 'Greek', 'ελληνικά': 'Greek', 'ellinika': 'Greek', 'hebrew': 'Hebrew', 
+            'עברית': 'Hebrew', 'ivrit': 'Hebrew', 'persian': 'Persian', 'farsi': 'Persian', 'پارسی': 'Persian', 
+            'dari': 'Persian', 'malay': 'Malay', 'bahasa melayu': 'Malay', 'bahasa malaysia': 'Malay', 
+            'indonesian': 'Indonesian', 'bahasa indonesia': 'Indonesian', 'filipino': 'Filipino', 
+            'tagalog': 'Filipino', 'pilipino': 'Filipino', 'ukrainian': 'Ukrainian', 'українська': 'Ukrainian', 
+            'ukrayinska': 'Ukrainian', 'czech': 'Czech', 'čeština': 'Czech', 'cestina': 'Czech', 
+            'swedish': 'Swedish', 'svenska': 'Swedish', 'norwegian': 'Norwegian', 'norsk': 'Norwegian', 
+            'bokmål': 'Norwegian', 'nynorsk': 'Norwegian', 'danish': 'Danish', 'dansk': 'Danish', 
+            'finnish': 'Finnish', 'suomi': 'Finnish', 'hungarian': 'Hungarian', 'magyar': 'Hungarian', 
+            'romanian': 'Romanian', 'română': 'Romanian', 'romana': 'Romanian', 'bulgarian': 'Bulgarian', 
+            'български': 'Bulgarian', 'balgarski': 'Bulgarian', 'serbian': 'Serbian', 'српски': 'Serbian', 
+            'srpski': 'Serbian', 'croatian': 'Croatian', 'hrvatski': 'Croatian', 'slovak': 'Slovak', 
+            'slovenčina': 'Slovak', 'slovencina': 'Slovak', 'slovenian': 'Slovenian', 'slovenščina': 'Slovenian', 
+            'slovenscina': 'Slovenian', 'assamese': 'Assamese', 'gujarati': 'Gujarati', 'gujarati,hindi': 'Gujarati', 
+            'kannada': 'Kannada', 'malayalam': 'Malayalam', 'malayalam,ml': 'Malayalam', 'malayalam,tamil': 'Malayalam', 
+            'marathi': 'Marathi', 'nepali': 'Nepali', 'odia': 'Odia', 'punjabi': 'Punjabi', 'sanskrit': 'Sanskrit', 
+            'estonian': 'Estonian', 'dan': 'Dan'
         };
 
         const STATIC_COUNTRIES = [
@@ -614,6 +579,18 @@
 
         audio.autoplay = false;
         audio.preload = 'auto';
+        audio.setAttribute('playsinline', ''); // Helps with iOS playback
+
+        // Add event listener to handle suspend event for background playback
+        audio.addEventListener('suspend', () => {
+            console.log('Audio suspended, attempting to resume...');
+            if (isPlaying && currentStation) {
+                audio.play().catch(err => {
+                    console.error('Failed to resume audio on suspend:', err);
+                    showError(`Failed to resume audio: ${err.message}\nPlease try resuming manually. On iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.`, true);
+                });
+            }
+        });
 
         audio.addEventListener('playing', () => {
             isPlaying = true;
@@ -621,8 +598,9 @@
             reconnectAttempts = 0;
             updatePlayerDisplay();
             clearError();
-            showLoading(false); // Hide loading when playing
+            showLoading(false);
             startHeartbeat();
+            updateMediaSession();
             console.log('Audio is playing');
         });
 
@@ -630,6 +608,7 @@
             isPlaying = false;
             stopHeartbeat();
             updatePlayerDisplay();
+            updateMediaSession();
             console.log('Audio paused');
         });
 
@@ -638,10 +617,10 @@
             console.error('Audio error:', e);
             stopHeartbeat();
             if (!isPlaying) {
-                showError('Stream error: Station may be offline or incompatible');
+                showError('Stream error: Station may be offline or incompatible.\nPlease select another station or retry.\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.', true);
                 showLoading(false);
             } else {
-                showError('Stream interrupted: Attempting to reconnect...');
+                showError('Stream interrupted: Attempting to reconnect...', true);
                 attemptReconnect();
             }
             updatePlayerDisplay();
@@ -665,82 +644,65 @@
             }
         });
 
-        // Function to normalize station names for deduplication
-        function normalizeStationName(name) {
-            if (!name) return '';
-
-            // Convert to lowercase and trim whitespace
-            let normalized = name.toLowerCase().trim();
-
-            // Remove common prefixes like "AIR" or "All India Radio"
-            const prefixes = ['air', 'all india radio'];
-            for (const prefix of prefixes) {
-                const prefixPattern = new RegExp(`^${prefix}\\s+`, 'i');
-                normalized = normalized.replace(prefixPattern, '');
+        // Handle visibility change to keep audio playing in the background
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden' && isPlaying && currentStation) {
+                console.log('App minimized or screen off, ensuring audio continues...');
+                audio.play().catch(err => {
+                    console.error('Failed to keep audio playing in background:', err);
+                    showError(`Background playback failed: ${err.message}\nPlease try resuming manually. On iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.`, true);
+                });
             }
+        });
 
-            // Remove common location suffixes to merge stations like "Akashvani Maitree" and "AIR Akashvani Maitree Kolkata"
-            const locationSuffixes = [
-                'kolkata', 'delhi', 'mumbai', 'chennai', 'bangalore', 'hyderabad', 'pune', 'ahmedabad',
-                'jaipur', 'lucknow', 'patna', 'bhopal', 'indore', 'nagpur', 'kanpur', 'surat', 'vadodara',
-                'coimbatore', 'madurai', 'trivandrum', 'kochi', 'calicut', 'mysore', 'mangalore', 'goa',
-                'guwahati', 'shillong', 'imphal', 'agartala', 'aizawl', 'kohima', 'itanagar', 'gangtok',
-                'new delhi', 'north', 'south', 'east', 'west', 'central'
-            ];
-            for (const suffix of locationSuffixes) {
-                const suffixPattern = new RegExp(`\\s+${suffix}$`, 'i');
-                normalized = normalized.replace(suffixPattern, '');
+        // Update Media Session metadata for lock screen controls and background playback
+        function updateMediaSession() {
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: currentStation ? currentStation.name : 'World FM Radio',
+                    artist: 'World FM Radio',
+                    album: 'Live Stream',
+                    artwork: [
+                        { src: 'https://via.placeholder.com/96x96', sizes: '96x96', type: 'image/png' },
+                        { src: 'https://via.placeholder.com/128x128', sizes: '128x128', type: 'image/png' },
+                    ]
+                });
+
+                navigator.mediaSession.setActionHandler('play', () => {
+                    if (currentStation) {
+                        audio.play().then(() => {
+                            isPlaying = true;
+                            updatePlayerDisplay();
+                            startHeartbeat();
+                        }).catch(err => {
+                            console.error('Media Session play failed:', err);
+                            showError(`Playback failed: ${err.message}\nPlease try resuming manually.`, true);
+                        });
+                    }
+                });
+
+                navigator.mediaSession.setActionHandler('pause', () => {
+                    audio.pause();
+                    isPlaying = false;
+                    stopHeartbeat();
+                    updatePlayerDisplay();
+                });
+
+                navigator.mediaSession.setActionHandler('stop', () => {
+                    stopPlayback();
+                    showError('User Stopped Playback', false);
+                });
+
+                navigator.mediaSession.setActionHandler('previoustrack', () => {
+                    previousStation();
+                });
+
+                navigator.mediaSession.setActionHandler('nexttrack', () => {
+                    nextStation();
+                });
+
+                navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
             }
-
-            return normalized.trim();
-        }
-
-        // Function to deduplicate stations based on normalized names and URLs
-        function normalizeStations(stations) {
-            const stationMap = new Map();
-
-            stations.forEach(station => {
-                const normalizedName = normalizeStationName(station.name);
-                if (!normalizedName) return; // Skip stations with empty normalized names
-
-                // Create a unique key by combining normalized name and URL (if available)
-                const primaryUrl = station.url_resolved || station.url || '';
-                const key = `${normalizedName}|${primaryUrl}`;
-
-                if (stationMap.has(key)) {
-                    // Merge with existing station
-                    const existingStation = stationMap.get(key);
-
-                    // Keep the name with more details (e.g., prefer "AIR Akashvani Maitree Kolkata" over "Akashvani Maitree")
-                    if (station.name.length > existingStation.name.length) {
-                        existingStation.name = station.name;
-                    }
-
-                    // Use the highest bitrate
-                    if (station.bitrate && (!existingStation.bitrate || parseInt(station.bitrate) > parseInt(existingStation.bitrate))) {
-                        existingStation.bitrate = station.bitrate;
-                    }
-
-                    // Prefer url_resolved if available, otherwise keep the first valid URL
-                    if (station.url_resolved && (!existingStation.url_resolved || station.url_resolved !== existingStation.url_resolved)) {
-                        existingStation.url_resolved = station.url_resolved;
-                    } else if (station.url && !existingStation.url) {
-                        existingStation.url = station.url;
-                    }
-
-                    // Combine languages if different
-                    if (station.language && station.language !== existingStation.language) {
-                        existingStation.language = `${existingStation.language || ''}, ${station.language}`.trim();
-                    }
-                } else {
-                    // Add new station to the map
-                    stationMap.set(key, { ...station });
-                }
-            });
-
-            const normalized = Array.from(stationMap.values());
-            console.log(`Normalized stations: Reduced from ${stations.length} to ${normalized.length}`);
-            return normalized;
         }
 
         async function fetchFromFastestServer(endpoint, retryCount = 0) {
@@ -769,44 +731,108 @@
         async function getUserCountryCode() {
             try {
                 const response = await fetch('https://ipapi.co/json/');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
                 console.log('User country detected:', data.country_code);
                 return data.country_code || 'IN';
             } catch (error) {
                 console.error('Failed to detect user country:', error);
-                return 'IN';
+                return 'IN'; // Fallback to India if detection fails
             }
         }
 
         async function initializeApp() {
+            console.log('Starting app initialization...');
             showLoading(true);
+
             try {
+                // Populate country dropdown first, regardless of network status
+                console.log('Populating country dropdown...');
                 populateCountryDropdown(STATIC_COUNTRIES);
+                console.log('Country dropdown populated with', STATIC_COUNTRIES.length, 'countries');
+
+                // Attempt to get user's country code with fallback
                 const userCountryCode = await getUserCountryCode();
                 const countrySelect = document.getElementById('countrySelect');
+                if (!countrySelect) throw new Error('Country select element not found');
+
                 const validCountry = STATIC_COUNTRIES.some(c => c.code === userCountryCode);
-                countrySelect.value = validCountry ? userCountryCode : 'IN';
-                console.log('Selected country:', countrySelect.value);
-                updateFlagDisplay(countrySelect.value);
-                await fetchAndDisplayAllStations(countrySelect.value);
+                const selectedCountry = validCountry ? userCountryCode : 'IN';
+                countrySelect.value = selectedCountry;
+                console.log('Selected country:', selectedCountry);
+
+                updateFlagDisplay(selectedCountry);
+
+                // Fetch stations for the selected country
+                await fetchAndDisplayAllStations(selectedCountry);
                 showError('');
             } catch (error) {
                 console.error('Initialization error:', error);
-                showError(`Failed to load data: ${error.message}\nPlease check your internet connection`, true);
+                showError(`Failed to initialize app: ${error.message}\nPlease check your internet connection and retry.`, true);
+                // Ensure country dropdown remains populated even if station fetch fails
+                if (!document.getElementById('countrySelect').children.length) {
+                    populateCountryDropdown(STATIC_COUNTRIES);
+                }
             } finally {
                 showLoading(false);
+                console.log('App initialization complete');
             }
+        }
+
+        function mergeDuplicateStations(stations) {
+            const seen = new Map();
+            const deduplicated = [];
+
+            for (const station of stations) {
+                const normalizedLanguage = normalizeLanguage(station.language);
+                const key = `${station.name.toLowerCase()}|${normalizedLanguage || 'unknown'}`;
+
+                if (!seen.has(key)) {
+                    seen.set(key, station);
+                    deduplicated.push(station);
+                } else {
+                    console.log(`Duplicate station found and merged: ${station.name} (${normalizedLanguage})`);
+                }
+            }
+
+            console.log(`Reduced stations from ${stations.length} to ${deduplicated.length} after merging duplicates`);
+            return deduplicated;
         }
 
         async function fetchAndDisplayAllStations(countryCode) {
             showLoading(true);
             try {
-                const allStations = await fetchFromFastestServer(`/json/stations/bycountrycodeexact/${countryCode}?hidebroken=true&order=votes&reverse=true`);
-                if (!allStations.length) throw new Error(`No stations found for ${countryCode}`);
-                // Normalize stations by merging duplicates
-                countryStations = normalizeStations(allStations);
+                const cacheKey = `${CACHE_KEY}_${countryCode}`;
+                const cachedData = localStorage.getItem(cacheKey);
+                let allStations = null;
+
+                if (cachedData) {
+                    const { data, timestamp } = JSON.parse(cachedData);
+                    const now = Date.now();
+                    if (now - timestamp < CACHE_DURATION) {
+                        console.log('Using cached stations for country:', countryCode);
+                        allStations = data;
+                    } else {
+                        console.log('Cache expired for country:', countryCode);
+                        localStorage.removeItem(cacheKey);
+                    }
+                }
+
+                if (!allStations) {
+                    console.log('Fetching stations for country code:', countryCode);
+                    allStations = await fetchFromFastestServer(`/json/stations/bycountrycodeexact/${countryCode}?hidebroken=true&order=votes&reverse=true`);
+                    if (!allStations || !allStations.length) throw new Error(`No stations found for ${countryCode}`);
+
+                    localStorage.setItem(cacheKey, JSON.stringify({
+                        data: allStations,
+                        timestamp: Date.now()
+                    }));
+                    console.log('Stations cached for country:', countryCode);
+                }
+
+                countryStations = mergeDuplicateStations(allStations);
                 stations = [...countryStations];
-                console.log('All stations fetched and normalized:', countryStations.length);
+                console.log('All stations after deduplication:', countryStations.length);
 
                 const stationSelect = document.getElementById('stationSelect');
                 stationSelect.innerHTML = '<option value="">Select Station</option>';
@@ -837,13 +863,18 @@
                 requestAnimationFrame(renderBatch);
             } catch (error) {
                 console.error('Error fetching stations:', error);
-                showError(`Failed to load stations: ${error.message}`, true);
+                showError(`Failed to load stations for ${countryCode}: ${error.message}\nPlease try another country or retry.`, true);
                 showLoading(false);
             }
         }
 
         function populateCountryDropdown(countries) {
             const countrySelect = document.getElementById('countrySelect');
+            if (!countrySelect) {
+                console.error('Country select element not found');
+                showError('UI error: Country dropdown not found.\nPlease refresh the page.', true);
+                return;
+            }
             countrySelect.innerHTML = '<option value="">Select Country</option>';
             const fragment = document.createDocumentFragment();
             countries.forEach(country => {
@@ -855,16 +886,18 @@
             });
             countrySelect.appendChild(fragment);
             countrySelect.disabled = false;
-            console.log('Country dropdown populated instantly');
+            console.log('Country dropdown populated with', countries.length, 'countries');
 
             countrySelect.addEventListener('change', async (e) => {
                 const countryCode = e.target.value;
                 updateFlagDisplay(countryCode);
                 if (countryCode) {
+                    clearError();
                     await fetchAndDisplayAllStations(countryCode);
                     document.getElementById('languageSelect').disabled = false;
                     document.getElementById('stationSelect').disabled = false;
                 } else {
+                    clearError();
                     document.getElementById('languageSelect').innerHTML = '<option value="">Select country first</option>';
                     document.getElementById('languageSelect').disabled = true;
                     document.getElementById('stationSelect').innerHTML = '<option value="">Select language first</option>';
@@ -966,6 +999,7 @@
                 } else {
                     stationSelect.disabled = false;
                     console.log('Filtered stations rendered:', stations.length);
+                    updatePlayerDisplay();
                 }
             };
 
@@ -977,6 +1011,8 @@
             if (stationIndex !== '') {
                 stopHeartbeat();
                 playStation(stations[stationIndex]);
+            } else {
+                stopPlayback();
             }
         });
 
@@ -994,7 +1030,6 @@
                 let workingUrl = station.url_resolved || station.url;
                 console.log('Initial URL:', workingUrl);
 
-                // Check if the URL is a playlist file (.m3u or .pls)
                 if (workingUrl.endsWith('.m3u') || workingUrl.endsWith('.pls')) {
                     console.log('Detected playlist file, fetching and parsing:', workingUrl);
                     const response = await fetch(workingUrl);
@@ -1051,11 +1086,15 @@
                     throw new Error(`Playback failed: ${err.message}`);
                 });
                 isPlaying = true;
+
+                const stationIndex = stations.indexOf(station);
+                document.getElementById('stationSelect').value = stationIndex;
+
                 updatePlayerDisplay();
             } catch (error) {
                 console.error('Play error:', error);
                 hasError = true;
-                showError(`Failed to play ${station.name}: ${error.message}\nTry another station or check your connection`);
+                showError(`Failed to play ${station.name}: ${error.message}\nPlease select another station or retry.\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.`, true);
                 isPlaying = false;
                 currentStation = null;
                 updatePlayerDisplay();
@@ -1071,7 +1110,7 @@
 
                 const timeout = setTimeout(() => {
                     testAudio.src = '';
-                    console.log('Stream test timed out after 5s:', url);
+                    console.log('Stream test timed out after 2s:', url);
                     resolve(false);
                 }, TEST_STREAM_TIMEOUT);
 
@@ -1116,7 +1155,7 @@
 
         async function attemptReconnect() {
             if (!currentStation) {
-                showError('No station selected to reconnect');
+                showError('No station selected to reconnect.\nPlease select a station to play.\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.', true);
                 showLoading(false);
                 isPlaying = false;
                 updatePlayerDisplay();
@@ -1127,22 +1166,25 @@
             reconnectAttempts++;
             console.log(`Reconnect attempt ${reconnectAttempts}`);
 
-            // Progressive delay: start at BASE_RECONNECT_DELAY and increase by DELAY_INCREMENT per attempt, capped at MAX_RECONNECT_DELAY
-            const delay = Math.min(BASE_RECONNECT_DELAY + (reconnectAttempts - 1) * DELAY_INCREMENT, MAX_RECONNECT_DELAY);
+            const delay = Math.min(
+                BASE_RECONNECT_DELAY + (DELAY_INCREMENT * (reconnectAttempts - 1)),
+                MAX_RECONNECT_DELAY
+            );
 
             try {
-                // Clear error and show loading indicator at the start of the reconnect attempt
-                clearError();
-                showLoading(true);
+                if (reconnectAttempts === 1) {
+                    showLoading(true);
+                }
+                showError(`Stream interrupted: Reconnecting (Attempt ${reconnectAttempts})...`, true);
+                document.querySelector('.player').classList.add('connecting');
 
-                audio.pause();
-                audio.src = '';
-                await new Promise(resolve => setTimeout(resolve, delay));
+                if (audio.src) {
+                    audio.pause();
+                }
 
                 let workingUrl = currentStation.url_resolved || currentStation.url;
-                console.log('Reconnect URL:', workingUrl);
+                console.log('Re-fetching URL for reconnect:', workingUrl);
 
-                // Check if the URL is a playlist file during reconnect
                 if (workingUrl.endsWith('.m3u') || workingUrl.endsWith('.pls')) {
                     console.log('Detected playlist file during reconnect, fetching and parsing:', workingUrl);
                     const response = await fetch(workingUrl);
@@ -1161,32 +1203,76 @@
                     if (!foundStreamUrl) throw new Error('No valid stream URL found in playlist file during reconnect');
                 }
 
+                if (!SKIP_STREAM_TEST) {
+                    const urlsToTry = [workingUrl, ...(currentStation.url_alt || []).filter(url => url)].filter(url => url && url.startsWith('http'));
+                    let streamTestPassed = false;
+                    for (const url of urlsToTry) {
+                        console.log('Testing URL during reconnect:', url);
+                        if (await testStream(url)) {
+                            workingUrl = url;
+                            streamTestPassed = true;
+                            break;
+                        }
+                    }
+                    if (!streamTestPassed) {
+                        throw new Error('No working stream URL found after testing during reconnect');
+                    }
+                }
+
+                console.log('Reconnecting with URL:', workingUrl);
                 audio.src = workingUrl;
                 audio.volume = document.getElementById('volume').value;
+
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => reject(new Error('Stream loading timed out')), 5000);
+                    audio.addEventListener('canplay', () => {
+                        clearTimeout(timeout);
+                        resolve();
+                    }, { once: true });
+                    audio.addEventListener('error', (e) => {
+                        clearTimeout(timeout);
+                        reject(new Error(`Failed to load stream: ${e.message}`));
+                    }, { once: true });
+                    audio.load();
+                });
 
                 await audio.play();
                 isPlaying = true;
                 hasError = false;
-                reconnectAttempts = 0; // Reset attempts on successful reconnect
+                reconnectAttempts = 0;
                 clearError();
+                showLoading(false);
                 updatePlayerDisplay();
                 startHeartbeat();
                 console.log('Reconnect successful');
             } catch (error) {
                 console.error('Reconnect failed:', error);
-                showError(`Stream interrupted: Attempting to reconnect (Attempt ${reconnectAttempts})...`);
-                setTimeout(attemptReconnect, delay); // Continue retrying with the calculated delay
+                showError(`Stream interrupted: Reconnect failed (Attempt ${reconnectAttempts})\nRetrying in ${Math.round(delay/1000)}s...\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.`, true);
+                setTimeout(attemptReconnect, delay);
+            } finally {
+                document.querySelector('.player').classList.remove('connecting');
+                if (reconnectAttempts > 1) {
+                    showLoading(false);
+                }
             }
         }
 
         function updatePlayerDisplay() {
             const playPauseBtn = document.getElementById('playPauseBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const previousBtn = document.getElementById('previousBtn');
+            const nextBtn = document.getElementById('nextBtn');
             const nowPlaying = document.getElementById('nowPlaying');
             const span = nowPlaying.querySelector('span');
             
             playPauseBtn.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
             playPauseBtn.disabled = !currentStation;
             playPauseBtn.classList.toggle('active', isPlaying && currentStation);
+            stopBtn.disabled = !currentStation;
+
+            const currentIndex = currentStation ? stations.indexOf(currentStation) : -1;
+            previousBtn.disabled = !currentStation || stations.length <= 1 || currentIndex === 0;
+            nextBtn.disabled = !currentStation || stations.length <= 1 || currentIndex === stations.length - 1;
 
             if (currentStation) {
                 const text = `Now Playing: ${currentStation.name}${currentStation.bitrate ? ` (${currentStation.bitrate}kbps)` : ''}`;
@@ -1227,16 +1313,49 @@
             } catch (error) {
                 console.error('Play/pause error:', error);
                 hasError = true;
-                showError(`Playback error: ${error.message}`);
+                showError(`Playback error: ${error.message}\nPlease select another station or retry.\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.`, true);
                 isPlaying = false;
+                currentStation = null;
                 updatePlayerDisplay();
             }
+        });
+
+        document.getElementById('stopBtn').addEventListener('click', () => {
+            stopPlayback();
+            showError('User Stopped Playback', false);
+        });
+
+        function stopPlayback() {
+            audio.pause();
+            audio.src = '';
+            currentStation = null;
+            isPlaying = false;
+            stopHeartbeat();
+            updatePlayerDisplay();
+            clearError();
+            document.getElementById('stationSelect').value = '';
+        }
+
+        // Volume and Mute Control
+        let isMuted = false;
+        let lastVolume = 1;
+
+        document.getElementById('muteBtn').addEventListener('click', () => {
+            isMuted = !isMuted;
+            audio.volume = isMuted ? 0 : lastVolume;
+            document.getElementById('volume').value = isMuted ? 0 : lastVolume;
+            document.getElementById('volumeLevel').textContent = `${Math.round(audio.volume * 100)}%`;
+            document.getElementById('muteBtn').innerHTML = isMuted ? '<i class="fas fa-volume-mute"></i>' : '<i class="fas fa-volume-up"></i>';
+            if (!isMuted) lastVolume = audio.volume;
         });
 
         document.getElementById('volume').addEventListener('input', (e) => {
             const volume = parseFloat(e.target.value);
             audio.volume = volume;
             document.getElementById('volumeLevel').textContent = `${Math.round(volume * 100)}%`;
+            isMuted = volume === 0;
+            lastVolume = volume > 0 ? volume : lastVolume;
+            document.getElementById('muteBtn').innerHTML = isMuted ? '<i class="fas fa-volume-mute"></i>' : '<i class="fas fa-volume-up"></i>';
         });
 
         function showLoading(show) {
@@ -1246,39 +1365,113 @@
 
         function showError(message, showRetry = false) {
             const errorContainer = document.getElementById('errorContainer');
-            if (message && hasError) {
+            if (message) {
                 errorContainer.innerHTML = `
-                    <div class="error">${message}</div>
-                    ${showRetry ? `<button class="retry-button" onclick="retryAction()">Retry</button>` : ''}
+                    <div class="error-container">
+                        <div class="error">${message}</div>
+                        ${showRetry ? `
+                            <button class="retry-button" onclick="retryAction()" aria-label="Retry connection">
+                                <i class="fas fa-sync-alt spinner"></i>
+                                <span class="retry-text">Retry</span>
+                            </button>
+                        ` : ''}
+                    </div>
                 `;
+                hasError = true;
+                lastError = { message, showRetry };
+                updateRetryButtonState();
             } else {
                 errorContainer.innerHTML = '';
+                hasError = false;
+                lastError = { message: null, showRetry: false };
+            }
+        }
+
+        function updateRetryButtonState() {
+            const retryButton = document.querySelector('.retry-button');
+            if (retryButton) {
+                retryButton.disabled = isRetrying;
+                retryButton.classList.toggle('loading', isRetrying);
+                retryButton.classList.toggle('active', !isRetrying);
             }
         }
 
         function clearError() {
             hasError = false;
+            isRetrying = false;
             document.getElementById('errorContainer').innerHTML = '';
+            lastError = { message: null, showRetry: false };
         }
 
-        function retryAction() {
+        async function retryAction() {
             if (!navigator.onLine) {
                 showError('No internet connection detected', true);
                 return;
             }
-            if (!countryStations.length) {
-                initializeApp();
-            } else if (currentStation) {
-                playStation(currentStation);
-            } else {
-                location.reload();
+
+            isRetrying = true;
+            updateRetryButtonState();
+
+            try {
+                if (!countryStations.length) {
+                    await initializeApp();
+                } else if (currentStation) {
+                    await playStation(currentStation);
+                } else {
+                    showError('No station selected.\nPlease select a station to play.\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.', true);
+                }
+            } catch (error) {
+                console.error('Retry failed:', error);
+                showError(`Retry failed: ${error.message}\nPlease select another station or retry.\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.`, true);
+            } finally {
+                isRetrying = false;
+                updateRetryButtonState();
             }
+        }
+
+        async function previousStation() {
+            if (!currentStation || stations.length <= 1) return;
+            const currentIndex = stations.indexOf(currentStation);
+            if (currentIndex > 0) {
+                stopHeartbeat();
+                await playStation(stations[currentIndex - 1]);
+            }
+        }
+
+        async function nextStation() {
+            if (!currentStation || stations.length <= 1) return;
+            const currentIndex = stations.indexOf(currentStation);
+            if (currentIndex < stations.length - 1) {
+                stopHeartbeat();
+                await playStation(stations[currentIndex + 1]);
+            }
+        }
+
+        document.getElementById('previousBtn').addEventListener('click', previousStation);
+        document.getElementById('nextBtn').addEventListener('click', nextStation);
+
+        // Register Service Worker for PWA and background playback
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('Service Worker registered with scope:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.error('Service Worker registration failed:', error);
+                    });
+            });
+        } else {
+            console.warn('Service Workers are not supported in this browser.');
         }
 
         window.addEventListener('load', async () => {
             if (!navigator.onLine) {
                 showError('No internet connection detected', true);
                 return;
+            }
+            if (lastError.message) {
+                showError(lastError.message, lastError.showRetry);
             }
             await initializeApp();
         });
@@ -1289,17 +1482,26 @@
             if (e.code === 'Space' && currentStation) {
                 e.preventDefault();
                 document.getElementById('playPauseBtn').click();
+            } else if (e.code === 'Enter' && hasError && !isRetrying) {
+                e.preventDefault();
+                retryAction();
             }
         });
 
         window.addEventListener('offline', () => {
             showError('Internet connection lost', true);
             stopHeartbeat();
+            audio.pause();
+            isPlaying = false;
+            updatePlayerDisplay();
         });
 
         window.addEventListener('online', () => {
-            if (currentStation && !isPlaying) {
+            if (currentStation) {
+                showError('Internet connection restored.\nAttempting to reconnect to the last station...', true);
                 attemptReconnect();
+            } else {
+                showError('Internet connection restored.\nPlease select a station to play or retry.', true);
             }
         });
     </script>
