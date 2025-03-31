@@ -432,9 +432,9 @@
 
     <script>
         const API_SERVERS = [
-            'https://all.api.radio-browser.info',
-            'https://fi1.api.radio-browser.info',
-            'https://de2.api.radio-browser.info'
+            'http://all.api.radio-browser.info',
+            'http://fi1.api.radio-browser.info',
+            'http://de2.api.radio-browser.info'
         ];
         const MAX_RETRIES = 3;
         const MIN_STATION_COUNT = 1;
@@ -587,7 +587,7 @@
             if (isPlaying && currentStation) {
                 audio.play().catch(err => {
                     console.error('Failed to resume audio on suspend:', err);
-                    showError(`Failed to resume audio: ${err.message}\nPlease try resuming manually. On iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.`, true);
+                    showError(`Couldn't resume playback.\nTry pressing play or selecting a new station.`, true);
                 });
             }
         });
@@ -617,10 +617,10 @@
             console.error('Audio error:', e);
             stopHeartbeat();
             if (!isPlaying) {
-                showError('Stream error: Station may be offline or incompatible.\nPlease select another station or retry.\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.', true);
+                showError(`Station unavailable.\nTry another station or press retry.`, true);
                 showLoading(false);
             } else {
-                showError('Stream interrupted: Attempting to reconnect...', true);
+                showError(`Connection lost.\nTrying to reconnect...`, true);
                 attemptReconnect();
             }
             updatePlayerDisplay();
@@ -650,7 +650,7 @@
                 console.log('App minimized or screen off, ensuring audio continues...');
                 audio.play().catch(err => {
                     console.error('Failed to keep audio playing in background:', err);
-                    showError(`Background playback failed: ${err.message}\nPlease try resuming manually. On iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.`, true);
+                    showError(`Background playback stopped.\nTry resuming manually.`, true);
                 });
             }
         });
@@ -676,7 +676,7 @@
                             startHeartbeat();
                         }).catch(err => {
                             console.error('Media Session play failed:', err);
-                            showError(`Playback failed: ${err.message}\nPlease try resuming manually.`, true);
+                            showError(`Can't start playback.\nTry again or pick a different station.`, true);
                         });
                     }
                 });
@@ -690,7 +690,7 @@
 
                 navigator.mediaSession.setActionHandler('stop', () => {
                     stopPlayback();
-                    showError('User Stopped Playback', false);
+                    showError('Playback stopped.', false);
                 });
 
                 navigator.mediaSession.setActionHandler('previoustrack', () => {
@@ -768,7 +768,7 @@
                 showError('');
             } catch (error) {
                 console.error('Initialization error:', error);
-                showError(`Failed to initialize app: ${error.message}\nPlease check your internet connection and retry.`, true);
+                showError(`Can't load the app.\nCheck your internet and try again.`, true);
                 // Ensure country dropdown remains populated even if station fetch fails
                 if (!document.getElementById('countrySelect').children.length) {
                     populateCountryDropdown(STATIC_COUNTRIES);
@@ -863,7 +863,7 @@
                 requestAnimationFrame(renderBatch);
             } catch (error) {
                 console.error('Error fetching stations:', error);
-                showError(`Failed to load stations for ${countryCode}: ${error.message}\nPlease try another country or retry.`, true);
+                showError(`No stations loaded for ${countryCode}.\nTry another country or press retry.`, true);
                 showLoading(false);
             }
         }
@@ -872,7 +872,7 @@
             const countrySelect = document.getElementById('countrySelect');
             if (!countrySelect) {
                 console.error('Country select element not found');
-                showError('UI error: Country dropdown not found.\nPlease refresh the page.', true);
+                showError(`App error: Country list missing.\nPlease refresh the page.`, true);
                 return;
             }
             countrySelect.innerHTML = '<option value="">Select Country</option>';
@@ -1049,7 +1049,7 @@
                 }
 
                 if (!SKIP_STREAM_TEST) {
-                    const urlsToTry = [workingUrl, ...(station.url_alt || []).filter(url => url)].filter(url => url && url.startsWith('http'));
+                    const urlsToTry = [workingUrl, ...(station.url_alt || []).filter(url => url)].filter(url => url && url.startsWith('http');
                     let streamTestPassed = false;
                     for (const url of urlsToTry) {
                         console.log('Testing URL:', url);
@@ -1094,7 +1094,7 @@
             } catch (error) {
                 console.error('Play error:', error);
                 hasError = true;
-                showError(`Failed to play ${station.name}: ${error.message}\nPlease select another station or retry.\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.`, true);
+                showError(`Can't play ${station.name}.\nCheck your connection or try another station.`, true);
                 isPlaying = false;
                 currentStation = null;
                 updatePlayerDisplay();
@@ -1155,7 +1155,7 @@
 
         async function attemptReconnect() {
             if (!currentStation) {
-                showError('No station selected to reconnect.\nPlease select a station to play.\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.', true);
+                showError(`No station selected.\nPick a station to start playing.`, true);
                 showLoading(false);
                 isPlaying = false;
                 updatePlayerDisplay();
@@ -1163,11 +1163,22 @@
                 return;
             }
 
+            const MAX_RECONNECT_ATTEMPTS = 5;
             reconnectAttempts++;
-            console.log(`Reconnect attempt ${reconnectAttempts}`);
+            console.log(`Reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
 
+            if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+                showError(`Failed to reconnect after ${MAX_RECONNECT_ATTEMPTS} tries.\nTry a different station or check your internet.`, true);
+                isPlaying = false;
+                updatePlayerDisplay();
+                stopHeartbeat();
+                showLoading(false);
+                return;
+            }
+
+            // Exponential backoff with jitter
             const delay = Math.min(
-                BASE_RECONNECT_DELAY + (DELAY_INCREMENT * (reconnectAttempts - 1)),
+                BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1) + (Math.random() * DELAY_INCREMENT),
                 MAX_RECONNECT_DELAY
             );
 
@@ -1175,7 +1186,7 @@
                 if (reconnectAttempts === 1) {
                     showLoading(true);
                 }
-                showError(`Stream interrupted: Reconnecting (Attempt ${reconnectAttempts})...`, true);
+                showError(`Connection lost.\nReconnecting (Attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`, true);
                 document.querySelector('.player').classList.add('connecting');
 
                 if (audio.src) {
@@ -1204,7 +1215,7 @@
                 }
 
                 if (!SKIP_STREAM_TEST) {
-                    const urlsToTry = [workingUrl, ...(currentStation.url_alt || []).filter(url => url)].filter(url => url && url.startsWith('http'));
+                    const urlsToTry = [workingUrl, ...(currentStation.url_alt || []).filter(url => url)].filter(url => url && url.startsWith('http');
                     let streamTestPassed = false;
                     for (const url of urlsToTry) {
                         console.log('Testing URL during reconnect:', url);
@@ -1247,7 +1258,7 @@
                 console.log('Reconnect successful');
             } catch (error) {
                 console.error('Reconnect failed:', error);
-                showError(`Stream interrupted: Reconnect failed (Attempt ${reconnectAttempts})\nRetrying in ${Math.round(delay/1000)}s...\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.`, true);
+                showError(`Reconnect failed (Attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}).\nRetrying in ${Math.round(delay/1000)}s...`, true);
                 setTimeout(attemptReconnect, delay);
             } finally {
                 document.querySelector('.player').classList.remove('connecting');
@@ -1313,7 +1324,7 @@
             } catch (error) {
                 console.error('Play/pause error:', error);
                 hasError = true;
-                showError(`Playback error: ${error.message}\nPlease select another station or retry.\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.`, true);
+                showError(`Playback issue.\nTry again or switch stations.`, true);
                 isPlaying = false;
                 currentStation = null;
                 updatePlayerDisplay();
@@ -1322,7 +1333,7 @@
 
         document.getElementById('stopBtn').addEventListener('click', () => {
             stopPlayback();
-            showError('User Stopped Playback', false);
+            showError('Playback stopped.', false);
         });
 
         function stopPlayback() {
@@ -1405,7 +1416,7 @@
 
         async function retryAction() {
             if (!navigator.onLine) {
-                showError('No internet connection detected', true);
+                showError(`No internet connection.\nPlease reconnect and try again.`, true);
                 return;
             }
 
@@ -1418,11 +1429,11 @@
                 } else if (currentStation) {
                     await playStation(currentStation);
                 } else {
-                    showError('No station selected.\nPlease select a station to play.\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.', true);
+                    showError(`No station selected.\nChoose a station to play.`, true);
                 }
             } catch (error) {
                 console.error('Retry failed:', error);
-                showError(`Retry failed: ${error.message}\nPlease select another station or retry.\nOn iOS, ensure "Background App Refresh" is enabled for Safari. On Android, disable battery optimization for your browser.`, true);
+                showError(`Retry failed.\nCheck your connection or try another station.`, true);
             } finally {
                 isRetrying = false;
                 updateRetryButtonState();
@@ -1467,7 +1478,7 @@
 
         window.addEventListener('load', async () => {
             if (!navigator.onLine) {
-                showError('No internet connection detected', true);
+                showError(`No internet connection.\nPlease reconnect and try again.`, true);
                 return;
             }
             if (lastError.message) {
@@ -1489,7 +1500,7 @@
         });
 
         window.addEventListener('offline', () => {
-            showError('Internet connection lost', true);
+            showError(`Internet connection lost.\nPlease reconnect to continue.`, true);
             stopHeartbeat();
             audio.pause();
             isPlaying = false;
@@ -1498,10 +1509,10 @@
 
         window.addEventListener('online', () => {
             if (currentStation) {
-                showError('Internet connection restored.\nAttempting to reconnect to the last station...', true);
+                showError(`Internet restored.\nReconnecting to your station...`, true);
                 attemptReconnect();
             } else {
-                showError('Internet connection restored.\nPlease select a station to play or retry.', true);
+                showError(`Internet restored.\nSelect a station to start listening.`, true);
             }
         });
     </script>
