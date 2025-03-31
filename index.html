@@ -143,9 +143,9 @@
         }
 
         @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(0, 180, 216, 0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(0, 180, 216, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(0, 180, 216, 0); }
+            0% { box-shadow: 0 0 0 0 rgba(0, 180, 216, 0.7); transform: scale(1); }
+            70% { box-shadow: 0 0 0 15px rgba(0, 180, 216, 0); transform: scale(1.05); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 180, 216, 0); transform: scale(1); }
         }
 
         .player {
@@ -260,33 +260,36 @@
         }
 
         .retry-button {
-            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
             color: var(--text-light);
             font-family: 'Poppins', sans-serif;
             font-size: 1em;
-            font-weight: 600;
-            padding: 10px 20px;
-            border-radius: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            padding: 12px 24px;
+            border-radius: 12px;
             border: none;
             cursor: pointer;
-            box-shadow: var(--shadow);
+            box-shadow: var(--shadow), inset 0 2px 4px rgba(255, 255, 255, 0.1);
             transition: all 0.3s ease;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 10px;
+            text-transform: uppercase;
         }
 
         .retry-button:hover:not(:disabled) {
             transform: scale(1.05);
-            box-shadow: 0 0 15px rgba(0, 180, 216, 0.7);
+            box-shadow: 0 0 20px rgba(0, 180, 216, 0.8), inset 0 2px 4px rgba(255, 255, 255, 0.2);
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 80%);
         }
 
         .retry-button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
-            box-shadow: none;
+            box-shadow: var(--shadow);
         }
 
         .retry-button.active {
@@ -295,7 +298,8 @@
 
         .retry-button .spinner {
             display: none;
-            font-size: 0.9em;
+            font-size: 1em;
+            color: var(--text-light);
         }
 
         .retry-button.loading .spinner {
@@ -375,7 +379,7 @@
                 width: 80%;
             }
             .retry-button {
-                padding: 8px 16px;
+                padding: 10px 20px;
                 font-size: 0.9em;
             }
         }
@@ -432,9 +436,9 @@
 
     <script>
         const API_SERVERS = [
-            'https://all.api.radio-browser.info',
-            'https://fi1.api.radio-browser.info',
-            'https://de2.api.radio-browser.info'
+            'http://all.api.radio-browser.info',
+            'http://fi1.api.radio-browser.info',
+            'http://de2.api.radio-browser.info'
         ];
         const MAX_RETRIES = 3;
         const MIN_STATION_COUNT = 1;
