@@ -13,6 +13,28 @@
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     </noscript>
     <style>
+/* Add smooth scrolling for long station lists */
+select {
+    /* ... existing styles ... */
+    scroll-behavior: smooth;
+}
+
+/* Enhance button focus states for accessibility */
+button:focus {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* Add loading animation for station list */
+.station-loading {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
         :root {
             --primary: #00b4d8;
             --secondary: #90e0ef;
