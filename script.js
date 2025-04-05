@@ -42,6 +42,7 @@ let lastSelectedCountry = null;
 let errorDebounceTimeout = null;
 let isOffline = !navigator.onLine;
 let userInteracted = false;
+let hls = null; // Added for HLS support
 
 audio.autoplay = false;
 audio.preload = 'auto';
@@ -114,9 +115,9 @@ audio.addEventListener('error', (e) => {
         setTimeout(() => playStation(currentStation), AUDIO_ERROR_RETRY_DELAY);
     } else if (currentStation) {
         console.error(`${currentStation.name} failed after ${MAX_AUDIO_ERROR_RETRIES} retries`);
-        showError(`${errorMessage}\n${currentStation.name} failed after ${MAX_AUDIO_ERROR_RETRIES} attempts. Trying fallback station...`);
+        showError(`${errorMessage}\n${currentStation.name} failed. Switching to next station...`);
         audioErrorRetryCount = 0;
-        playStation(FALLBACK_STATION);
+        nextStation(); // Switch to next station instead of fallback
     } else {
         showError(`${errorMessage}\nChoose a station to start the music.`);
         updatePlayerDisplay();
@@ -197,7 +198,9 @@ async function fetchFromFastestServer(endpoint, retryCount = 0) {
         return results;
     } catch (error) {
         console.error('Fetch attempt failed:', error.message);
-        if (retryCount < MAX_RETRIES - 1) {
+        if (retryCount < MAX_RETRIES - 1)
+
+{
             console.log('Retrying fetch...');
             return fetchFromFastestServer(endpoint, retryCount + 1);
         }
@@ -487,6 +490,10 @@ async function playStation(station) {
     isManuallyPaused = false;
     isPlaying = false;
 
+    if (hls) {
+        hls.destroy();
+        hls = null;
+    }
     audio.pause();
     audio.src = '';
     audio.load();
@@ -495,12 +502,14 @@ async function playStation(station) {
     try {
         let url = station.url_resolved || station.url;
         console.log('Resolved URL:', url);
-        if (url.endsWith('.m3u') || url.endsWith('.pls')) {
+
+        if (url.endsWith('.m3u') || url.endsWith('.pls') || url.endsWith('.m3u8')) {
             console.log('Fetching playlist file:', url);
             const response = await fetch(url);
             if (!response.ok) throw new Error(`Failed to fetch playlist: ${response.statusText}`);
             const text = await response.text();
             const lines = text.split('\n');
+            console.log('Playlist contents:', lines);
             let foundStreamUrl = false;
             for (const line of lines) {
                 if (line.trim().startsWith('http')) {
@@ -513,15 +522,29 @@ async function playStation(station) {
             if (!foundStreamUrl) throw new Error('No valid stream URL found in playlist');
         }
 
-        if (!SKIP_STREAM_TEST) {
-            const isStreamValid = await testStream(url);
-            if (!isStreamValid) throw new Error('Stream test failed: URL is not playable.');
+        if (url.endsWith('.m3u8') && Hls.isSupported()) {
+            hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(audio);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                audio.play().then(() => {
+                    console.log('HLS playback started');
+                });
+            });
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                throw new Error(`HLS error: ${data.details}`);
+            });
+        } else {
+            if (!SKIP_STREAM_TEST) {
+                const isStreamValid = await testStream(url);
+                if (!isStreamValid) throw new Error('Stream test failed: URL is not playable.');
+            }
+            audio.src = url;
+            audio.volume = document.getElementById('volume').value;
+            console.log('Starting playback...', { url, volume: audio.volume });
+            await audio.play();
         }
 
-        audio.src = url;
-        audio.volume = document.getElementById('volume').value;
-        console.log('Starting playback...', { url, volume: audio.volume });
-        await audio.play();
         isPlaying = true;
         hasError = false;
         const stationIndex = stations.indexOf(station);
@@ -535,7 +558,7 @@ async function playStation(station) {
         console.error('Failed to play station:', error.message, { station });
         hasError = true;
         isPlaying = false;
-        showError(`We couldn’t play ${station.name}.\nIt might be offline—please choose another station or try the fallback!`);
+        showError(`We couldn’t play ${station.name}.\nIt might be offline—please choose another station!`);
     } finally {
         showLoading(false);
     }
@@ -914,92 +937,4 @@ if ('serviceWorker' in navigator) {
                 break;
         }
     });
-}
-
-let hls = null;
-
-async function playStation(station) {
-    if (isOffline) {
-        showError('You are offline!\nPlease check your internet connection.');
-        return;
-    }
-    console.log('Attempting to play station:', { name: station.name, url: station.url });
-    clearError();
-    showLoading(true);
-    hasError = false;
-    isManuallyPaused = false;
-    isPlaying = false;
-
-    if (hls) {
-        hls.destroy();
-        hls = null;
-    }
-    audio.pause();
-    audio.src = '';
-    audio.load();
-    currentStation = station;
-
-    try {
-        let url = station.url_resolved || station.url;
-        console.log('Resolved URL:', url);
-
-        if (url.endsWith('.m3u') || url.endsWith('.pls') || url.endsWith('.m3u8')) {
-            console.log('Fetching playlist file:', url);
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`Failed to fetch playlist: ${response.statusText}`);
-            const text = await response.text();
-            const lines = text.split('\n');
-            console.log('Playlist contents:', lines);
-            let foundStreamUrl = false;
-            for (const line of lines) {
-                if (line.trim().startsWith('http')) {
-                    url = line.trim();
-                    foundStreamUrl = true;
-                    console.log('Found stream URL in playlist:', url);
-                    break;
-                }
-            }
-            if (!foundStreamUrl) throw new Error('No valid stream URL found in playlist');
-        }
-
-        if (url.endsWith('.m3u8') && Hls.isSupported()) {
-            hls = new Hls();
-            hls.loadSource(url);
-            hls.attachMedia(audio);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                audio.play().then(() => {
-                    console.log('HLS playback started');
-                });
-            });
-            hls.on(Hls.Events.ERROR, (event, data) => {
-                throw new Error(`HLS error: ${data.details}`);
-            });
-        } else {
-            if (!SKIP_STREAM_TEST) {
-                const isStreamValid = await testStream(url);
-                if (!isStreamValid) throw new Error('Stream test failed: URL is not playable.');
-            }
-            audio.src = url;
-            audio.volume = document.getElementById('volume').value;
-            console.log('Starting playback...', { url, volume: audio.volume });
-            await audio.play();
-        }
-
-        isPlaying = true;
-        hasError = false;
-        const stationIndex = stations.indexOf(station);
-        if (stationIndex !== -1) document.getElementById('stationSelect').value = stationIndex;
-        clearError();
-        updatePlayerDisplay();
-        updateMediaSession();
-        localStorage.setItem('lastStation', JSON.stringify(station));
-        console.log('Station playing successfully:', station.name);
-    } catch (error) {
-        console.error('Failed to play station:', error.message, { station });
-        hasError = true;
-        isPlaying = false;
-        showError(`We couldn’t play ${station.name}.\nIt might be offline—please choose another station!`);
-    } finally {
-        showLoading(false);
-    }
 }
