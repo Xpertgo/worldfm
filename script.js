@@ -42,7 +42,7 @@ let lastSelectedCountry = null;
 let errorDebounceTimeout = null;
 let isOffline = !navigator.onLine;
 let userInteracted = false;
-let hls = null; // Added for HLS support
+let hls = null;
 
 audio.autoplay = false;
 audio.preload = 'auto';
@@ -117,7 +117,7 @@ audio.addEventListener('error', (e) => {
         console.error(`${currentStation.name} failed after ${MAX_AUDIO_ERROR_RETRIES} retries`);
         showError(`${errorMessage}\n${currentStation.name} failed. Switching to next station...`);
         audioErrorRetryCount = 0;
-        nextStation(); // Switch to next station instead of fallback
+        nextStation();
     } else {
         showError(`${errorMessage}\nChoose a station to start the music.`);
         updatePlayerDisplay();
@@ -198,9 +198,7 @@ async function fetchFromFastestServer(endpoint, retryCount = 0) {
         return results;
     } catch (error) {
         console.error('Fetch attempt failed:', error.message);
-        if (retryCount < MAX_RETRIES - 1)
-
-{
+        if (retryCount < MAX_RETRIES - 1) {
             console.log('Retrying fetch...');
             return fetchFromFastestServer(endpoint, retryCount + 1);
         }
