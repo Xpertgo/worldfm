@@ -915,7 +915,7 @@ if ('serviceWorker' in navigator) {
         }
     });
 }
-// native HLS support
+
 let hls = null;
 
 async function playStation(station) {
