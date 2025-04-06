@@ -10,21 +10,22 @@ const MAX_RETRIES = 3;
 const TEST_STREAM_TIMEOUT = 2000;
 const SKIP_STREAM_TEST = true;
 const BATCH_SIZE = 50;
-const HEARTBEAT_INTERVAL = 10000;
+const HEARTBEAT_INTERVAL = 5000;
 const CACHE_KEY = 'world_fm_radio_stations';
 const CACHE_DURATION = 1 * 60 * 60 * 1000;
 const AUDIO_ERROR_RETRY_DELAY = 2000;
 const MAX_AUDIO_ERROR_RETRIES = 5;
 const INIT_RETRY_DELAY = 2000;
-
-const FALLBACK_STATION = {
-    name: "Test Station (Fallback)",
-    url: "http://stream.zeno.fm/5z7v8k3v0zquv",
-    language: "English",
-    bitrate: 128
-};
+const SILENCE_DETECTION_INTERVAL = 3000; // Check for silence every 3 seconds
 
 const audio = new Audio();
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+const sourceNode = audioContext.createMediaElementSource(audio);
+const analyser = audioContext.createAnalyser();
+sourceNode.connect(analyser);
+analyser.connect(audioContext.destination);
+analyser.fftSize = 256;
+
 let currentStation = null;
 let isPlaying = false;
 let hasError = false;
@@ -32,6 +33,7 @@ let isLoading = false;
 let countryStations = [];
 let stations = [];
 let heartbeatTimer = null;
+let silenceTimer = null;
 let lastError = { message: null };
 let selectedLanguage = '';
 let isStopping = false;
@@ -43,13 +45,23 @@ let errorDebounceTimeout = null;
 let isOffline = !navigator.onLine;
 let userInteracted = false;
 
+const keepAliveAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+keepAliveAudio.loop = true;
+keepAliveAudio.volume = 0;
+
 audio.autoplay = false;
 audio.preload = 'auto';
 audio.setAttribute('playsinline', '');
+audio.setAttribute('crossorigin', 'anonymous');
+document.body.appendChild(audio);
 
 document.addEventListener('click', () => {
     userInteracted = true;
     console.log('User interaction detected, enabling autoplay.');
+    audioContext.resume().then(() => {
+        console.log('Audio context resumed');
+        keepAliveAudio.play().catch(err => console.warn('Keep-alive audio failed to start:', err));
+    }).catch(err => console.error('Failed to resume audio context:', err));
 }, { once: true });
 
 function getAudioErrorMessage(error) {
@@ -60,7 +72,7 @@ function getAudioErrorMessage(error) {
         case MediaError.MEDIA_ERR_ABORTED: return "The music was interrupted.";
         case MediaError.MEDIA_ERR_NETWORK: return "Looks like your internet dropped.";
         case MediaError.MEDIA_ERR_DECODE: return "This station’s sound isn’t working right now.";
-        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: return "This station isn’t available at the moment.";
+        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: return "This station isn’t supported by your device.";
         default: return "Something’s up with the music.";
     }
 }
@@ -68,9 +80,9 @@ function getAudioErrorMessage(error) {
 audio.addEventListener('suspend', () => {
     console.warn('Audio suspended, attempting to resume...', { isPlaying, isOffline, isManuallyPaused });
     if (isPlaying && currentStation && !isOffline && !isManuallyPaused) {
-        audio.play().catch(err => {
+        audioContext.resume().then(() => audio.play()).catch(err => {
             console.error('Failed to resume audio on suspend:', err);
-            showError("The music paused unexpectedly.\nPlease press play or pick a new station.");
+            showError("The music paused unexpectedly.\nPlease press play to resume.");
         });
     }
 });
@@ -84,6 +96,7 @@ audio.addEventListener('playing', () => {
     updatePlayerDisplay();
     showLoading(false);
     startHeartbeat();
+    startSilenceDetection();
     updateMediaSession();
     console.log('Audio started playing', { station: currentStation?.name });
 });
@@ -91,6 +104,7 @@ audio.addEventListener('playing', () => {
 audio.addEventListener('pause', () => {
     isPlaying = false;
     stopHeartbeat();
+    stopSilenceDetection();
     updatePlayerDisplay();
     updateMediaSession();
     console.log('Audio paused', { manual: isManuallyPaused });
@@ -101,6 +115,7 @@ audio.addEventListener('error', (e) => {
     hasError = true;
     console.error('Audio error occurred:', e, { code: e.target?.error?.code, message: e.target?.error?.message });
     stopHeartbeat();
+    stopSilenceDetection();
     isPlaying = false;
     if (isOffline) {
         showError('You are offline!\nPlease check your internet connection.');
@@ -127,14 +142,79 @@ audio.addEventListener('error', (e) => {
 audio.addEventListener('canplay', () => console.log('Audio can play', { src: audio.src }));
 
 document.addEventListener('visibilitychange', () => {
+    console.log('Visibility changed:', document.visibilityState);
     if (document.visibilityState === 'hidden' && isPlaying && currentStation && !isOffline && !isManuallyPaused) {
         console.log('App minimized or screen off, ensuring audio continues...');
-        audio.play().catch(err => {
+        audioContext.resume().then(() => audio.play()).catch(err => {
             console.error('Failed to keep audio playing in background:', err);
-            showError("The music stopped when you left the app.\nPlease tap play to bring it back!");
+            showError("The music stopped when the screen turned off.\nPlease tap play to resume!");
+        });
+        keepAliveAudio.play().catch(err => console.warn('Keep-alive failed in background:', err));
+    } else if (document.visibilityState === 'visible' && !isPlaying && currentStation && !isOffline && !isManuallyPaused) {
+        console.log('App restored, resuming audio...');
+        audioContext.resume().then(() => audio.play()).catch(err => {
+            console.error('Failed to resume audio on visibility restore:', err);
+            showError("The music didn’t restart.\nPlease tap play to bring it back!");
         });
     }
 });
+
+let wakeLock = null;
+async function requestWakeLock() {
+    if ('wakeLock' in navigator && isPlaying && !isOffline) {
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            console.log('Wake lock acquired');
+            wakeLock.addEventListener('release', () => {
+                console.log('Wake lock released');
+            });
+        } catch (err) {
+            console.error('Failed to acquire wake lock:', err);
+        }
+    }
+}
+
+async function releaseWakeLock() {
+    if (wakeLock) {
+        try {
+            await wakeLock.release();
+            wakeLock = null;
+            console.log('Wake lock released manually');
+        } catch (err) {
+            console.error('Failed to release wake lock:', err);
+        }
+    }
+}
+
+// Detect silence in audio output
+function startSilenceDetection() {
+    stopSilenceDetection();
+    silenceTimer = setInterval(() => {
+        if (isPlaying && !audio.paused && audio.currentTime > 0) {
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteFrequencyData(dataArray);
+            const average = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
+            console.log('Audio level check:', { average });
+            if (average < 1) { // Threshold for silence (adjust as needed)
+                console.warn('Silence detected in audio output');
+                showError("No sound detected from this station.\nSwitching to fallback...");
+                audio.pause();
+                audioErrorRetryCount = 0;
+                playStation(FALLBACK_STATION);
+            }
+        }
+    }, SILENCE_DETECTION_INTERVAL);
+    console.log('Silence detection started');
+}
+
+function stopSilenceDetection() {
+    if (silenceTimer) {
+        clearInterval(silenceTimer);
+        silenceTimer = null;
+        console.log('Silence detection stopped');
+    }
+}
 
 function updateMediaSession() {
     if ('mediaSession' in navigator) {
@@ -151,14 +231,19 @@ function updateMediaSession() {
         navigator.mediaSession.setActionHandler('play', async () => {
             if (currentStation && !isOffline) {
                 console.log('Media session play triggered');
-                audio.play().then(() => {
-                    isPlaying = true;
-                    isManuallyPaused = false;
-                    updatePlayerDisplay();
-                    startHeartbeat();
-                }).catch(err => {
-                    console.error('Media session play failed:', err);
-                    showError("We couldn’t start the music.\nPlease try again or pick a new station!");
+                audioContext.resume().then(() => {
+                    audio.play().then(() => {
+                        isPlaying = true;
+                        isManuallyPaused = false;
+                        updatePlayerDisplay();
+                        startHeartbeat();
+                        startSilenceDetection();
+                        requestWakeLock();
+                        keepAliveAudio.play().catch(err => console.warn('Keep-alive failed on play:', err));
+                    }).catch(err => {
+                        console.error('Media session play failed:', err);
+                        showError("We couldn’t start the music.\nPlease try again or pick a new station!");
+                    });
                 });
             }
         });
@@ -168,6 +253,8 @@ function updateMediaSession() {
             isPlaying = false;
             isManuallyPaused = true;
             stopHeartbeat();
+            stopSilenceDetection();
+            releaseWakeLock();
             updatePlayerDisplay();
         });
         navigator.mediaSession.setActionHandler('stop', stopPlayback);
@@ -466,7 +553,7 @@ async function testStream(url) {
         const response = await fetch(url, { method: 'HEAD', signal: controller.signal });
         clearTimeout(timeoutId);
         const contentType = response.headers.get('Content-Type') || '';
-        const isValid = (contentType.includes('audio') || contentType.includes('application/ogg') || contentType.includes('application/x-mpegURL')) && response.ok;
+        const isValid = (contentType.includes('audio/mpeg') || contentType.includes('audio/mp3')) && response.ok; // Prefer MP3 for broader support
         console.log('Stream test result:', { url, isValid, contentType });
         return isValid;
     } catch (error) {
@@ -515,12 +602,17 @@ async function playStation(station) {
 
         if (!SKIP_STREAM_TEST) {
             const isStreamValid = await testStream(url);
-            if (!isStreamValid) throw new Error('Stream test failed: URL is not playable.');
+            if (!isStreamValid) {
+                console.warn('Stream invalid, falling back to default');
+                url = FALLBACK_STATION.url; // Fallback to known good stream
+            }
         }
 
         audio.src = url;
-        audio.volume = document.getElementById('volume').value;
+        audio.volume = document.getElementById('volume') ? document.getElementById('volume').value : 0.5;
+        audio.muted = false;
         console.log('Starting playback...', { url, volume: audio.volume });
+        await audioContext.resume();
         await audio.play();
         isPlaying = true;
         hasError = false;
@@ -529,13 +621,16 @@ async function playStation(station) {
         clearError();
         updatePlayerDisplay();
         updateMediaSession();
+        requestWakeLock();
+        keepAliveAudio.play().catch(err => console.warn('Keep-alive failed on station play:', err));
         localStorage.setItem('lastStation', JSON.stringify(station));
         console.log('Station playing successfully:', station.name);
     } catch (error) {
         console.error('Failed to play station:', error.message, { station });
         hasError = true;
         isPlaying = false;
-        showError(`We couldn’t play ${station.name}.\nIt might be offline—please choose another station or try the fallback!`);
+        showError(`We couldn’t play ${station.name}.\nSwitching to fallback station...`);
+        playStation(FALLBACK_STATION);
     } finally {
         showLoading(false);
     }
@@ -665,14 +760,18 @@ function updatePlayerDisplay() {
 function startHeartbeat() {
     stopHeartbeat();
     heartbeatTimer = setInterval(() => {
-        if (!isPlaying && !isManuallyPaused && !hasError) {
-            console.warn('Heartbeat detected playback stopped unexpectedly');
-            stopHeartbeat();
-            isPlaying = false;
-            if (currentStation) {
-                showError(isOffline ? 'You are offline!\nPlease check your internet connection.' : `The music cut out on ${currentStation.name}.\nPlease pick a station to keep going!`);
+        if (isPlaying && currentStation && !isOffline && !isManuallyPaused) {
+            if (audio.paused || audio.ended) {
+                console.warn('Heartbeat detected audio stopped unexpectedly');
+                audioContext.resume().then(() => audio.play()).catch(err => {
+                    console.error('Heartbeat resume failed:', err.name, err.message);
+                    stopHeartbeat();
+                    isPlaying = false;
+                    showError("The music stopped unexpectedly.\nPlease tap play to resume!");
+                    updatePlayerDisplay();
+                });
+                keepAliveAudio.play().catch(err => console.warn('Keep-alive failed in heartbeat:', err));
             }
-            updatePlayerDisplay();
         }
     }, HEARTBEAT_INTERVAL);
     console.log('Heartbeat started');
@@ -682,7 +781,7 @@ function stopHeartbeat() {
     if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
         heartbeatTimer = null;
-        console.log('Heartbeat stopped');
+        console.log('Heartbeat stopped', new Error().stack.split('\n')[2]);
     }
 }
 
@@ -700,8 +799,11 @@ function stopPlayback() {
 
     currentStation = null;
     stopHeartbeat();
+    stopSilenceDetection();
     updatePlayerDisplay();
     clearError();
+    releaseWakeLock();
+    keepAliveAudio.pause();
     localStorage.removeItem('lastStation');
     setTimeout(() => { isStopping = false; }, 100);
     showError('The playback has been interrupted.');
@@ -771,6 +873,9 @@ document.getElementById('playPauseBtn').addEventListener('click', async () => {
             isPlaying = false;
             isManuallyPaused = true;
             stopHeartbeat();
+            stopSilenceDetection();
+            releaseWakeLock();
+            keepAliveAudio.pause();
             clearError();
             showError('Paused! Click play to resume');
             updatePlayerDisplay();
@@ -838,7 +943,7 @@ window.addEventListener('online', async () => {
             showError('You’re back online, but the station isn’t playing.\nTry again or pick a new one!');
         });
     } else {
-        showError('You’re back online!\nPlease choose a station to start the music.\nPlay button to resume playback.');
+        showError('You’re back online!\nPlease choose a station to start the music.');
     }
     updatePlayerDisplay();
 });
@@ -850,6 +955,9 @@ window.addEventListener('offline', () => {
         isPlaying = false;
         if (audio.played.length > 0) audio.pause();
         stopHeartbeat();
+        stopSilenceDetection();
+        releaseWakeLock();
+        keepAliveAudio.pause();
         showError('You are offline!\nPlease check your internet connection.');
         updatePlayerDisplay();
     }
@@ -900,6 +1008,9 @@ if ('serviceWorker' in navigator) {
                     isPlaying = false;
                     isManuallyPaused = true;
                     stopHeartbeat();
+                    stopSilenceDetection();
+                    releaseWakeLock();
+                    keepAliveAudio.pause();
                     updatePlayerDisplay();
                 }
                 break;
@@ -915,3 +1026,11 @@ if ('serviceWorker' in navigator) {
         }
     });
 }
+
+const FALLBACK_STATION = {
+    name: 'Fallback Station',
+    url: 'http://icecast.radiofrance.fr/franceinfo-hifi.mp3', // Verified MP3 stream
+    language: 'English',
+    bitrate: 128,
+    votes: 100
+};
