@@ -372,7 +372,7 @@ button.active {
     #countrySelect { padding-left: 28px; background-size: 20px 14px; }
     .player { display: flex; justify-content: space-between; align-items: center; padding: 8px; bottom: 5px; left: 5px; right: 5px; gap: 8px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: var(--shadow-light); }
     .player-controls { order: 2; gap: 6px; flex-shrink: 0; }
-    .now-playing { order: 1; font-size: 0.95em; max-width: 35%; text-align: left; padding: 4px 8px; border-radius: 6px; flex: 1; }
+    .now-playing { order: 1; font-size: 0.95em; max-width: 50%; text-align: left; padding: 4px 8px; border-radius: 6px; flex: 1; }
     .now-playing.playing.overflowing span { animation: marquee 10s linear infinite; }
     .volume-control { order: 3; margin-left: auto; padding: 4px 8px; gap: 6px; flex-shrink: 0; }
     button { width: 38px; height: 38px; font-size: 1.1em; border-radius: 50%; background: linear-gradient(45deg, var(--primary) 20%, var(--secondary) 80%); box-shadow: var(--shadow-light); transition: transform 0.2s ease, box-shadow 0.2s ease; }
