@@ -219,8 +219,8 @@ function updateMediaSession() {
             artist: 'World FM Radio',
             album: 'Live Stream',
             artwork: [
-                { src: 'https://via.placeholder.com/96x96', sizes: '96x96', type: 'image/png' },
-                { src: 'https://via.placeholder.com/128x128', sizes: '128x128', type: 'image/png' }
+                { src: currentStation?.favicon || 'https://via.placeholder.com/96x96', sizes: '96x96', type: 'image/png' },
+                { src: currentStation?.favicon || 'https://via.placeholder.com/128x128', sizes: '128x128', type: 'image/png' }
             ]
         });
         navigator.mediaSession.setActionHandler('play', async () => {
@@ -307,7 +307,7 @@ async function getUserCountryCode() {
 
 async function initializeApp(retryCount = 0) {
     console.log('Initializing app...', { retryCount });
-    const requiredElements = ['countrySelect', 'volumeLevel', 'errorContainer', 'loading'];
+    const requiredElements = ['countrySelect', 'volumeLevel', 'errorContainer', 'loading', 'stationImage', 'stationIcon'];
     if (!requiredElements.every(id => document.getElementById(id))) {
         console.error('Required DOM elements missing:', requiredElements.filter(id => !document.getElementById(id)));
         if (retryCount < 3) {
@@ -320,6 +320,11 @@ async function initializeApp(retryCount = 0) {
     }
 
     showLoading(true);
+    const stationImage = document.getElementById('stationImage');
+    const stationIcon = document.getElementById('stationIcon');
+    stationImage.style.display = 'none'; // Hide placeholder image during initial load
+    stationIcon.style.display = 'flex';  // Show Font Awesome icon by default
+
     try {
         const countrySelect = document.getElementById('countrySelect');
         console.log('Populating country dropdown...');
@@ -562,7 +567,7 @@ async function playStation(station) {
         showError('You are offline!\nPlease check your internet connection.');
         return;
     }
-    console.log('Attempting to play station:', { name: station.name, url: station.url });
+    console.log('Attempting to play station:', { name: station.name, url: station.url, favicon: station.favicon });
     clearError();
     showLoading(true);
     hasError = false;
@@ -573,6 +578,35 @@ async function playStation(station) {
     audio.src = '';
     audio.load();
     currentStation = station;
+
+    // Update station image or switch to Font Awesome icon
+    const stationImage = document.getElementById('stationImage');
+    const stationIcon = document.getElementById('stationIcon');
+    stationImage.classList.add('loading');
+    stationIcon.style.display = 'none'; // Hide icon initially
+
+    if (station.favicon && station.favicon.match(/^https?:\/\//)) {
+        console.log('Attempting to load favicon:', station.favicon);
+        stationImage.src = station.favicon;
+        stationImage.style.display = 'block'; // Force visibility during load
+        stationImage.onerror = () => {
+            console.warn('Station favicon failed to load, falling back to default:', station.favicon);
+            stationImage.style.display = 'none';
+            stationIcon.style.display = 'flex';
+            stationImage.classList.remove('loading');
+        };
+        stationImage.onload = () => {
+            console.log('Station favicon loaded successfully:', station.favicon);
+            stationImage.style.display = 'block';
+            stationIcon.style.display = 'none';
+            stationImage.classList.remove('loading');
+        };
+    } else {
+        console.log('No valid favicon available, using default icon:', station.favicon);
+        stationImage.style.display = 'none';
+        stationIcon.style.display = 'flex';
+        stationImage.classList.remove('loading');
+    }
 
     try {
         let url = station.url_resolved || station.url;
@@ -731,6 +765,8 @@ function updatePlayerDisplay() {
     const previousBtn = document.getElementById('previousBtn');
     const nextBtn = document.getElementById('nextBtn');
     const nowPlaying = document.getElementById('nowPlaying');
+    const stationImage = document.getElementById('stationImage');
+    const stationIcon = document.getElementById('stationIcon');
     const span = nowPlaying.querySelector('span');
     playPauseBtn.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
     playPauseBtn.disabled = !currentStation || isOffline;
@@ -746,6 +782,8 @@ function updatePlayerDisplay() {
     } else {
         span.textContent = 'Select a station to play';
         nowPlaying.classList.remove('playing', 'overflowing');
+        stationImage.style.display = 'none'; // Hide image
+        stationIcon.style.display = 'flex';  // Show icon by default
     }
     console.log('Player display updated', { isPlaying, currentStation: currentStation?.name });
 }
@@ -797,6 +835,8 @@ function stopPlayback() {
     clearError();
     releaseWakeLock();
     keepAliveAudio.pause();
+    document.getElementById('stationImage').style.display = 'none';
+    document.getElementById('stationIcon').style.display = 'flex';
     localStorage.removeItem('lastStation');
     setTimeout(() => { isStopping = false; }, 100);
     showError('The playback has been interrupted.');
