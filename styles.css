@@ -21,7 +21,7 @@ body {
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    position: relative; /* Ensure container respects child positioning */
+    position: relative;
 }
 
 h1 {
@@ -157,31 +157,13 @@ button.active {
     padding: 15px;
     border-radius: 15px;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,  VHS255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
-    gap: 20px;
+    gap: 10px;
     align-items: center;
     box-shadow: var(--shadow);
     transition: all 0.3s ease;
     z-index: 1000;
-}
-
-.player.connecting {
-    border-color: var(--primary);
-    animation: connecting 1.5s infinite;
-}
-
-@keyframes connecting {
-    0% { box-shadow: 0 0 5px rgba(0, 180, 216, 0.3); }
-    50% { box-shadow: 0 0 15px rgba(0, 180, 216, 0.7); }
-    100% { box-shadow: 0 0 5px rgba(0, 180, 216, 0.3); }
-}
-
-.player-controls {
-    display: flex;
-    gap: 15px;
-    align-items: center;
-    justify-content: center;
 }
 
 .now-playing {
@@ -191,6 +173,8 @@ button.active {
     overflow: hidden;
     position: relative;
     white-space: nowrap;
+    min-width: 0;
+    padding-right: 10px;
 }
 
 .now-playing span {
@@ -231,20 +215,79 @@ button.active {
     100% { transform: translateY(0); }
 }
 
+.station-image-container {
+    width: 64px;
+    height: 64px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow-light);
+    position: relative;
+}
+
+#stationImage {
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* Ensure image fits within container */
+    transition: opacity 0.3s ease;
+    display: none; /* Hidden by default, shown when favicon loads */
+}
+
+#stationImage.loading {
+    opacity: 0.5;
+}
+
+#stationIcon {
+    font-size: 2em;
+    color: var(--primary);
+    display: flex; /* Shown by default as fallback */
+    align-self: center;
+}
+
+.player-controls-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.player-controls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.player.connecting {
+    border-color: var(--primary);
+    animation: connecting 1.5s infinite;
+}
+
+@keyframes connecting {
+    0% { box-shadow: 0 0 5px rgba(0, 180, 216, 0.3); }
+    50% { box-shadow: 0 0 15px rgba(0, 180, 216, 0.7); }
+    100% { box-shadow: 0 0 5px rgba(0, 180, 216, 0.3); }
+}
+
 .progress-container {
     display: none;
     width: 100%;
     max-width: 800px;
-    margin: 10px auto; /* Reduced margin to fit better */
-    padding: 0; /* Remove padding to minimize height */
-    background: transparent; /* Remove background to avoid overlap */
+    margin: 10px auto;
+    padding: 0;
+    background: transparent;
     border-radius: 5px;
-    position: relative; /* Ensure it stays in flow */
+    position: relative;
 }
 
 .progress-bar {
     width: 0%;
-    height: 10px; /* Reduced height for a smaller bar */
+    height: 10px;
     background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
     border-radius: 5px;
     transition: width 0.3s ease-in-out;
@@ -326,6 +369,8 @@ button.active {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 #volume {
@@ -333,7 +378,6 @@ button.active {
     accent-color: var(--primary);
     background: rgba(255, 255, 255, 0.1);
     border-radius: 5px;
-    
 }
 
 #volumeLevel {
@@ -341,19 +385,18 @@ button.active {
     text-align: right;
     font-size: 0.95em;
     color: var(--secondary);
-    align-items: fixed;
 }
-
 
 @media (max-width: 600px) {
     body { padding: 10px; }
     .container { padding-bottom: 120px; }
     .controls { flex-direction: column; gap: 15px; padding: 15px; }
     .control-group { width: 100%; }
-    .player { flex-direction: column; padding: 10px; bottom: 10px; left: 10px; right: 10px; gap: 15px; align-items: center; }
-    .player-controls { flex-wrap: wrap; justify-content: center; }
+    .player { flex-direction: column; padding: 10px; bottom: 10px; left: 10px; right: 10px; gap: 15px; }
     .now-playing { text-align: center; font-size: 1em; max-width: 100%; }
     .now-playing.playing.overflowing span { animation: marquee 12s linear infinite; }
+    .station-image-container { width: 65px; height: 65px; }
+    .player-controls { flex-wrap: wrap; justify-content: center; }
     button { width: 42px; height: 42px; font-size: 1.2em; }
     .volume-control { width: 100%; justify-content: center; }
     .progress-container { margin: 10px auto; }
@@ -367,26 +410,18 @@ button.active {
     body { padding: 8px; }
     .container { padding-bottom: 90px; }
     h1 { font-size: 1.6em; margin-bottom: 10px; text-align: center; text-shadow: 0 2px 8px rgba(0, 180, 216, 0.6); }
-    .controls { flex-direction: row; gap: 8px; padding: 8px; margin-bottom: 10px; border-radius: 12px; box-shadow: var(--shadow-light); border: 1px solid rgba(255, 255, 255, 0.15); }
+    .controls { flex-direction: row; gap: 8px; padding: 8px; margin-bottom: 10px; border-radius: 12px; box-shadow: var(--shadow-light); }
     .control-group { min-width: 0; flex: 1; }
-    .control-group label { font-size: 0.85em; color: var(--secondary); }
-    select { padding: 6px 8px; font-size: 0.9em; border-radius: 8px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: var(--shadow-light); transition: border-color 0.2s ease, box-shadow 0.2s ease; }
-    select:focus { border-color: var(--primary); box-shadow: 0 0 8px rgba(0, 180, 216, 0.6); }
-    #countrySelect { padding-left: 28px; background-size: 20px 14px; }
-    .player { display: flex; justify-content: space-between; align-items: center; padding: 8px; bottom: 5px; left: 5px; right: 5px; gap: 8px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: var(--shadow-light); }
-    .player-controls { order: 2; gap: 6px; flex-shrink: 0; }
-    .now-playing { order: 1; font-size: 0.95em; max-width: 50%; text-align: left; padding: 4px 8px; border-radius: 6px; flex: 1; }
+    .control-group label { font-size: 0.85em; }
+    select { padding: 6px 8px; font-size: 0.9em; border-radius: 8px; }
+    .player { display: flex; padding: 8px; bottom: 5px; left: 5px; right: 5px; gap: 8px; }
+    .now-playing { font-size: 0.95em; max-width: 50%; text-align: left; padding: 4px 8px; }
     .now-playing.playing.overflowing span { animation: marquee 10s linear infinite; }
-    .volume-control { order: 3; margin-left: auto; padding: 4px 8px; gap: 6px; flex-shrink: 0; }
-    button { width: 38px; height: 38px; font-size: 1.1em; border-radius: 50%; background: linear-gradient(45deg, var(--primary) 20%, var(--secondary) 80%); box-shadow: var(--shadow-light); transition: transform 0.2s ease, box-shadow 0.2s ease; }
-    button:hover { transform: scale(1.08); box-shadow: 0 0 12px rgba(0, 180, 216, 0.6); }
-    button.active { animation: pulse 1.2s infinite; }
-    #volume { width: 90px; height: 5px; background: rgba(255, 255, 255, 0.15); }
+    .station-image-container { width: 40px; height: 40px; }
+    .player-controls { gap: 6px; flex-shrink: 0; }
+    .volume-control { margin-left: auto; padding: 4px 8px; gap: 6px; }
+    button { width: 38px; height: 38px; font-size: 1.1em; }
+    #volume { width: 90px; height: 5px; }
     #volumeLevel { font-size: 0.85em; min-width: 35px; }
-    .progress-container { margin: 5px auto; }
     .progress-bar { height: 4px; }
-    .error-container { flex-direction: column; gap: 8px; margin: 10px 0; }
-    .error { font-size: 0.85em; padding: 8px; background: rgba(255, 107, 107, 0.15); border-radius: 8px; box-shadow: var(--shadow-light); }
-    .retry-button { padding: 6px 14px; font-size: 0.85em; min-width: 85px; border-radius: 8px; background: linear-gradient(90deg, var(--primary) 20%, var(--secondary) 80%); box-shadow: var(--shadow-light); transition: transform 0.2s ease, box-shadow 0.2s ease; }
-    .retry-button:hover:not(:disabled) { transform: scale(1.03); box-shadow: 0 0 12px rgba(0, 180, 216, 0.6); }
 }
