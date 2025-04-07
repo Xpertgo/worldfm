@@ -12,6 +12,7 @@
     <noscript>
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     </noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -46,11 +47,17 @@
 
         <div class="player">
             <div class="now-playing" id="nowPlaying"><span>Select a station to play</span></div>
-            <div class="player-controls">
-                <button id="previousBtn" disabled aria-label="Previous Station"><i class="fas fa-step-backward"></i></button>
-                <button id="playPauseBtn" disabled aria-label="Play/Pause"><i class="fas fa-play"></i></button>
-                <button id="stopBtn" disabled aria-label="Stop"><i class="fas fa-stop"></i></button>
-                <button id="nextBtn" disabled aria-label="Next Station"><i class="fas fa-step-forward"></i></button>
+            <div class="player-controls-group">
+                <div class="station-image-container">
+                    <img id="stationImage" src="https://via.placeholder.com/64x64" alt="Station Image" loading="lazy" onerror="this.style.display='none'; document.getElementById('stationIcon').style.display='flex';">
+                    <i id="stationIcon" class="fas fa-radio" style="display: none;"></i>
+                </div>
+                <div class="player-controls">
+                    <button id="previousBtn" disabled aria-label="Previous Station"><i class="fas fa-step-backward"></i></button>
+                    <button id="playPauseBtn" disabled aria-label="Play/Pause"><i class="fas fa-play"></i></button>
+                    <button id="stopBtn" disabled aria-label="Stop"><i class="fas fa-stop"></i></button>
+                    <button id="nextBtn" disabled aria-label="Next Station"><i class="fas fa-step-forward"></i></button>
+                </div>
             </div>
             <div class="volume-control">
                 <button id="muteBtn" aria-label="Mute/Unmute"><i class="fas fa-volume-up"></i></button>
