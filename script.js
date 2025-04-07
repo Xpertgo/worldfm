@@ -16,7 +16,7 @@ const CACHE_DURATION = 1 * 60 * 60 * 1000;
 const AUDIO_ERROR_RETRY_DELAY = 2000;
 const MAX_AUDIO_ERROR_RETRIES = 5;
 const INIT_RETRY_DELAY = 2000;
-const SILENCE_DETECTION_INTERVAL = 3000; // Check for silence every 3 seconds
+const SILENCE_DETECTION_INTERVAL = 3000;
 
 const audio = new Audio();
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -127,13 +127,10 @@ audio.addEventListener('error', (e) => {
         console.warn(`Retrying ${currentStation.name} due to error (attempt ${audioErrorRetryCount}/${MAX_AUDIO_ERROR_RETRIES})`);
         showError(`${errorMessage} Retrying ${currentStation.name}... (attempt ${audioErrorRetryCount})`);
         setTimeout(() => playStation(currentStation), AUDIO_ERROR_RETRY_DELAY);
-    } else if (currentStation) {
-        console.error(`${currentStation.name} failed after ${MAX_AUDIO_ERROR_RETRIES} retries`);
-        showError(`${errorMessage}\n${currentStation.name} failed after ${MAX_AUDIO_ERROR_RETRIES} attempts. Trying fallback station...`);
-        audioErrorRetryCount = 0;
-        playStation(FALLBACK_STATION);
     } else {
-        showError(`${errorMessage}\nChoose a station to start the music.`);
+        console.error(`${currentStation?.name || 'Station'} failed after ${MAX_AUDIO_ERROR_RETRIES} retries`);
+        showError(`${errorMessage}\nPlease try another station.`);
+        audioErrorRetryCount = 0;
         updatePlayerDisplay();
         showLoading(false);
     }
@@ -186,7 +183,6 @@ async function releaseWakeLock() {
     }
 }
 
-// Detect silence in audio output
 function startSilenceDetection() {
     stopSilenceDetection();
     silenceTimer = setInterval(() => {
@@ -196,12 +192,11 @@ function startSilenceDetection() {
             analyser.getByteFrequencyData(dataArray);
             const average = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
             console.log('Audio level check:', { average });
-            if (average < 1) { // Threshold for silence (adjust as needed)
+            if (average < 1) {
                 console.warn('Silence detected in audio output');
-                showError("No sound detected from this station.\nSwitching to fallback...");
+                showError("No sound detected from this station.\nPlease select another station.");
                 audio.pause();
                 audioErrorRetryCount = 0;
-                playStation(FALLBACK_STATION);
             }
         }
     }, SILENCE_DETECTION_INTERVAL);
@@ -393,8 +388,8 @@ async function fetchAndDisplayAllStations(countryCode) {
     } catch (error) {
         console.error('Failed to fetch/display stations:', error.message);
         stationsFailedToLoad = true;
-        showError('No stations loaded. Trying fallback station...');
-        stations = [FALLBACK_STATION];
+        showError('No stations loaded.\nPlease try another country or check your connection.');
+        stations = [];
         renderStationList();
     } finally {
         showLoading(false);
@@ -553,7 +548,7 @@ async function testStream(url) {
         const response = await fetch(url, { method: 'HEAD', signal: controller.signal });
         clearTimeout(timeoutId);
         const contentType = response.headers.get('Content-Type') || '';
-        const isValid = (contentType.includes('audio/mpeg') || contentType.includes('audio/mp3')) && response.ok; // Prefer MP3 for broader support
+        const isValid = (contentType.includes('audio/mpeg') || contentType.includes('audio/mp3')) && response.ok;
         console.log('Stream test result:', { url, isValid, contentType });
         return isValid;
     } catch (error) {
@@ -603,8 +598,7 @@ async function playStation(station) {
         if (!SKIP_STREAM_TEST) {
             const isStreamValid = await testStream(url);
             if (!isStreamValid) {
-                console.warn('Stream invalid, falling back to default');
-                url = FALLBACK_STATION.url; // Fallback to known good stream
+                throw new Error('Stream test failed');
             }
         }
 
@@ -629,8 +623,7 @@ async function playStation(station) {
         console.error('Failed to play station:', error.message, { station });
         hasError = true;
         isPlaying = false;
-        showError(`We couldn’t play ${station.name}.\nSwitching to fallback station...`);
-        playStation(FALLBACK_STATION);
+        showError(`We couldn’t play ${station.name}.\nPlease try another station.`);
     } finally {
         showLoading(false);
     }
@@ -1026,11 +1019,3 @@ if ('serviceWorker' in navigator) {
         }
     });
 }
-
-const FALLBACK_STATION = {
-    name: 'Fallback Station',
-    url: 'http://icecast.radiofrance.fr/franceinfo-hifi.mp3', // Verified MP3 stream
-    language: 'English',
-    bitrate: 128,
-    votes: 100
-};
