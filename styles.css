@@ -333,14 +333,17 @@ button.active {
     accent-color: var(--primary);
     background: rgba(255, 255, 255, 0.1);
     border-radius: 5px;
+    
 }
 
 #volumeLevel {
-    min-width: 30px;
+    min-width: 40px;
     text-align: right;
     font-size: 0.95em;
     color: var(--secondary);
+    align-items: fixed;
 }
+
 
 @media (max-width: 600px) {
     body { padding: 10px; }
@@ -355,7 +358,7 @@ button.active {
     .volume-control { width: 100%; justify-content: center; }
     .progress-container { margin: 10px auto; }
     .progress-bar { height: 7px; }
-    #volume { width: 65%; }
+    #volume { width: 68%; }
     .error-container { flex-wrap: wrap; justify-content: center; }
     .retry-button { padding: 8px 16px; font-size: 0.9em; min-width: 90px; }
 }
