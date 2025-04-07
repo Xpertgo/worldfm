@@ -27,7 +27,7 @@ body {
 h1 {
     font-size: 2.5em;
     font-weight: 700;
-    margin-bottom: 25px;
+    margin-bottom: 20px;
     background: linear-gradient(to right, var(--primary), var(--secondary));
     -webkit-background-clip: text;
     background-clip: text;
@@ -179,7 +179,7 @@ button.active {
 
 .player-controls {
     display: flex;
-    gap: 10px;
+    gap: 15px;
     align-items: center;
     justify-content: center;
 }
@@ -336,7 +336,7 @@ button.active {
 }
 
 #volumeLevel {
-    min-width: 40px;
+    min-width: 30px;
     text-align: right;
     font-size: 0.95em;
     color: var(--secondary);
@@ -351,11 +351,11 @@ button.active {
     .player-controls { flex-wrap: wrap; justify-content: center; }
     .now-playing { text-align: center; font-size: 1em; max-width: 100%; }
     .now-playing.playing.overflowing span { animation: marquee 12s linear infinite; }
-    button { width: 40px; height: 40px; font-size: 1.2em; }
+    button { width: 42px; height: 42px; font-size: 1.2em; }
     .volume-control { width: 100%; justify-content: center; }
-    .progress-container { margin: 5px auto; }
+    .progress-container { margin: 10px auto; }
     .progress-bar { height: 7px; }
-    #volume { width: 80%; }
+    #volume { width: 65%; }
     .error-container { flex-wrap: wrap; justify-content: center; }
     .retry-button { padding: 8px 16px; font-size: 0.9em; min-width: 90px; }
 }
