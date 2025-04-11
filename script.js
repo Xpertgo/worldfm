@@ -387,7 +387,7 @@ async function fetchAndDisplayAllStations(countryCode) {
             console.log('Stations cached successfully');
         }
         countryStations = mergeDuplicateStations(allStations);
-        stations = [...countryStations];
+        filterStationsByLanguage(selectedLanguage); // Apply language filter
         console.log('Rendering station list...', { stationCount: stations.length });
         renderStationList();
     } catch (error) {
@@ -1132,21 +1132,25 @@ function searchStations(query) {
     const clearBtn = document.getElementById('clearSearchBtn');
     
     if (!query) {
-        stations = [...countryStations];
+        // When query is empty, filter by selected language
+        filterStationsByLanguage(selectedLanguage);
         renderStationList();
         clearBtn.style.display = 'none';
         return;
     }
 
     const lowercaseQuery = query.toLowerCase();
-    stations = countryStations.filter(station => 
-        station.name.toLowerCase().includes(lowercaseQuery)
-    );
+    // Filter stations by query and respect selected language
+    stations = countryStations.filter(station => {
+        const matchesLanguage = !selectedLanguage || normalizeLanguage(station.language) === selectedLanguage;
+        return matchesLanguage && station.name.toLowerCase().includes(lowercaseQuery);
+    });
     
     renderStationList();
     clearBtn.style.display = 'inline-flex';
     console.log('Station search performed', { 
         query: lowercaseQuery, 
+        language: selectedLanguage,
         results: stations.length 
     });
 }
@@ -1158,7 +1162,8 @@ function clearSearch() {
     const isKeyboardVisible = document.activeElement === searchInput;
     
     searchInput.value = '';
-    stations = [...countryStations];
+    // Filter stations by selected language instead of resetting to all
+    filterStationsByLanguage(selectedLanguage);
     renderStationList();
     clearBtn.style.display = 'none';
     
@@ -1166,7 +1171,10 @@ function clearSearch() {
         searchInput.focus();
     }
     
-    console.log('Search cleared', { keyboardWasVisible: isKeyboardVisible });
+    console.log('Search cleared', { 
+        keyboardWasVisible: isKeyboardVisible, 
+        selectedLanguage 
+    });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
