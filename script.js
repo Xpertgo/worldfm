@@ -12,7 +12,7 @@ const SKIP_STREAM_TEST = true;
 const BATCH_SIZE = 50;
 const HEARTBEAT_INTERVAL = 5000;
 const CACHE_KEY = 'world_fm_radio_stations';
-const CACHE_DURATION = 1 * 60 * 60 * 1000;
+const CACHE_DURATION = 24 * 60 * 60 * 1000;
 const AUDIO_ERROR_RETRY_DELAY = 2000;
 const MAX_AUDIO_ERROR_RETRIES = 5;
 const INIT_RETRY_DELAY = 2000;
@@ -322,8 +322,8 @@ async function initializeApp(retryCount = 0) {
     showLoading(true);
     const stationImage = document.getElementById('stationImage');
     const stationIcon = document.getElementById('stationIcon');
-    stationImage.style.display = 'none'; // Hide placeholder image during initial load
-    stationIcon.style.display = 'flex';  // Show Font Awesome icon by default
+    stationImage.style.display = 'none';
+    stationIcon.style.display = 'flex';
 
     try {
         const countrySelect = document.getElementById('countrySelect');
@@ -510,9 +510,67 @@ function filterStationsByLanguage(language) {
     console.log('Filtered stations by language:', { language, count: stations.length });
 }
 
+function getFavorites() {
+    return JSON.parse(localStorage.getItem('favorites') || '[]');
+}
+
+function saveFavorites(favorites) {
+    localStorage.setItem('favorites', JSON.stringify(favorites));
+}
+
+function isFavorite(station) {
+    const favorites = getFavorites();
+    return favorites.some(f => f.url === station.url);
+}
+
+function toggleFavorite(station) {
+    if (!station) return;
+    let favorites = getFavorites();
+    const index = favorites.findIndex(f => f.url === station.url);
+    if (index === -1) {
+        favorites.push(station);
+        console.log(`Added ${station.name} to favorites`);
+    } else {
+        favorites.splice(index, 1);
+        console.log(`Removed ${station.name} from favorites`);
+    }
+    saveFavorites(favorites);
+    updateFavoriteButton();
+    renderStationList();
+}
+
+function updateFavoriteButton() {
+    const favoriteBtn = document.getElementById('favoriteBtn');
+    if (currentStation) {
+        favoriteBtn.disabled = false;
+        favoriteBtn.classList.toggle('favorited', isFavorite(currentStation));
+    } else {
+        favoriteBtn.disabled = true;
+        favoriteBtn.classList.remove('favorited');
+    }
+}
+
 function renderStationList() {
     const stationSelect = document.getElementById('stationSelect');
     stationSelect.innerHTML = '<option value="">Select Station</option>';
+    const favorites = getFavorites();
+
+    if (favorites.length > 0) {
+        const favGroup = document.createElement('optgroup');
+        favGroup.label = 'Favorites';
+        favorites.forEach((station) => {
+            const index = stations.findIndex(s => s.url === station.url);
+            if (index !== -1) {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
+                option.classList.add('favorited');
+                favGroup.appendChild(option);
+            }
+        });
+        stationSelect.appendChild(favGroup);
+    }
+
     let index = 0;
     const start = performance.now();
     const renderBatch = () => {
@@ -523,6 +581,7 @@ function renderStationList() {
             const option = document.createElement('option');
             option.value = index;
             option.textContent = `${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
+            if (isFavorite(station)) option.classList.add('favorited');
             if (station.votes > 100) option.classList.add('high-votes');
             else if (station.votes < 10) option.classList.add('low-votes');
             else option.classList.add('medium-votes');
@@ -535,6 +594,7 @@ function renderStationList() {
             console.log(`Station list rendered: ${stations.length} stations in ${performance.now() - start}ms`);
             showLoading(false);
             populateLanguageDropdown();
+            updateFavoriteButton();
         }
     };
     console.log('Starting station list render...');
@@ -579,16 +639,15 @@ async function playStation(station) {
     audio.load();
     currentStation = station;
 
-    // Update station image or switch to Font Awesome icon
     const stationImage = document.getElementById('stationImage');
     const stationIcon = document.getElementById('stationIcon');
     stationImage.classList.add('loading');
-    stationIcon.style.display = 'none'; // Hide icon initially
+    stationIcon.style.display = 'none';
 
     if (station.favicon && station.favicon.match(/^https?:\/\//)) {
         console.log('Attempting to load favicon:', station.favicon);
         stationImage.src = station.favicon;
-        stationImage.style.display = 'block'; // Force visibility during load
+        stationImage.style.display = 'block';
         stationImage.onerror = () => {
             console.warn('Station favicon failed to load, falling back to default:', station.favicon);
             stationImage.style.display = 'none';
@@ -782,9 +841,10 @@ function updatePlayerDisplay() {
     } else {
         span.textContent = 'Select a station to play';
         nowPlaying.classList.remove('playing', 'overflowing');
-        stationImage.style.display = 'none'; // Hide image
-        stationIcon.style.display = 'flex';  // Show icon by default
+        stationImage.style.display = 'none';
+        stationIcon.style.display = 'flex';
     }
+    updateFavoriteButton();
     console.log('Player display updated', { isPlaying, currentStation: currentStation?.name });
 }
 
@@ -939,6 +999,12 @@ document.getElementById('nextBtn').addEventListener('click', () => {
     nextStation();
 });
 
+document.getElementById('favoriteBtn').addEventListener('click', () => {
+    if (currentStation) {
+        toggleFavorite(currentStation);
+    }
+});
+
 document.getElementById('muteBtn').addEventListener('click', () => {
     const muteBtn = document.getElementById('muteBtn');
     const volume = document.getElementById('volume');
@@ -1059,3 +1125,80 @@ if ('serviceWorker' in navigator) {
         }
     });
 }
+
+function searchStations(query) {
+    const searchInput = document.getElementById('stationSearch');
+    const stationSelect = document.getElementById('stationSelect');
+    const clearBtn = document.getElementById('clearSearchBtn');
+    
+    if (!query) {
+        stations = [...countryStations];
+        renderStationList();
+        clearBtn.style.display = 'none';
+        return;
+    }
+
+    const lowercaseQuery = query.toLowerCase();
+    stations = countryStations.filter(station => 
+        station.name.toLowerCase().includes(lowercaseQuery)
+    );
+    
+    renderStationList();
+    clearBtn.style.display = 'inline-flex';
+    console.log('Station search performed', { 
+        query: lowercaseQuery, 
+        results: stations.length 
+    });
+}
+
+function clearSearch() {
+    const searchInput = document.getElementById('stationSearch');
+    const clearBtn = document.getElementById('clearSearchBtn');
+    
+    const isKeyboardVisible = document.activeElement === searchInput;
+    
+    searchInput.value = '';
+    stations = [...countryStations];
+    renderStationList();
+    clearBtn.style.display = 'none';
+    
+    if (isKeyboardVisible) {
+        searchInput.focus();
+    }
+    
+    console.log('Search cleared', { keyboardWasVisible: isKeyboardVisible });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('stationSearch');
+    const clearBtn = document.getElementById('clearSearchBtn');
+    
+    let searchTimeout;
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            searchStations(e.target.value.trim());
+        }, 300);
+    });
+
+    clearBtn.addEventListener('click', clearSearch);
+
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            clearTimeout(searchTimeout);
+            searchStations(e.target.value.trim());
+        }
+    });
+
+    searchInput.addEventListener('focus', () => {
+        if (searchInput.value) {
+            clearBtn.style.display = 'inline-flex';
+        }
+    });
+
+    searchInput.addEventListener('blur', () => {
+        if (!searchInput.value) {
+            clearBtn.style.display = 'none';
+        }
+    });
+});
