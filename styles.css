@@ -440,7 +440,7 @@ button.active {
     .player { flex-direction: column; padding: 10px; bottom: 5px; left: 10px; right: 10px; gap: 7px; max-width: calc(100% - 10px); }
     .now-playing { text-align: center; font-size: 1em; max-width: 100%; }
     .now-playing.playing.overflowing span { animation: marquee 12s linear infinite; }
-    .station-image-container { width: 55px; height: 55px; }
+    .station-image-container { width: 65px; height: 65px; }
     .player-controls { flex-wrap: wrap; justify-content: center; }
     button { width: 40px; height: 40px; font-size: 1.1em; }
     .volume-control { width: 100%; justify-content: center; }
