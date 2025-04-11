@@ -32,6 +32,13 @@
                     <option value="">Select country first</option>
                 </select>
             </div>
+            <div class="control-group search-wrapper">
+                <label for="stationSearch">Search Stations:</label>
+                <input type="text" id="stationSearch" placeholder="Search stations..." aria-label="Search Stations">
+                <button class="clear-search" id="clearSearchBtn" aria-label="Clear search" style="display: none;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
             <div class="control-group">
                 <label for="stationSelect">Station:</label>
                 <select id="stationSelect" disabled aria-label="Select Station">
@@ -57,6 +64,7 @@
                     <button id="playPauseBtn" disabled aria-label="Play/Pause"><i class="fas fa-play"></i></button>
                     <button id="stopBtn" disabled aria-label="Stop"><i class="fas fa-stop"></i></button>
                     <button id="nextBtn" disabled aria-label="Next Station"><i class="fas fa-step-forward"></i></button>
+                    <button id="favoriteBtn" disabled aria-label="Toggle Favorite"><i class="fas fa-star"></i></button>
                 </div>
             </div>
             <div class="volume-control">
