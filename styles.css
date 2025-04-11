@@ -8,7 +8,6 @@
     --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-
 body {
     font-family: 'Poppins', sans-serif;
     background: linear-gradient(135deg, #0d1b2a 0%, #1b263b 100%);
@@ -101,7 +100,7 @@ input[type="text"]::placeholder {
 #stationSearch {
     padding-left: 35px;
     padding-right: 40px;
-    background: var(--card-bg) url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%23ffffff" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>') no-repeat 10px center;
+    background:#1e2a3a url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%23ffffff" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>') no-repeat 10px center;
     background-size: 16px;
     box-sizing: border-box;
     position: relative;
