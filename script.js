@@ -387,7 +387,7 @@ async function fetchAndDisplayAllStations(countryCode) {
             console.log('Stations cached successfully');
         }
         countryStations = mergeDuplicateStations(allStations);
-        filterStationsByLanguage(selectedLanguage); // Apply language filter
+        filterStationsByLanguage(selectedLanguage);
         console.log('Rendering station list...', { stationCount: stations.length });
         renderStationList();
     } catch (error) {
@@ -526,17 +526,51 @@ function isFavorite(station) {
 function toggleFavorite(station) {
     if (!station) return;
     let favorites = getFavorites();
-    const index = favorites.findIndex(f => f.url === station.url);
-    if (index === -1) {
+    const stationSelect = document.getElementById('stationSelect');
+    const index = stations.findIndex(s => s.url === station.url);
+    const isNowFavorite = !isFavorite(station);
+
+    // Update favorites array
+    if (isNowFavorite) {
         favorites.push(station);
         console.log(`Added ${station.name} to favorites`);
     } else {
-        favorites.splice(index, 1);
+        favorites = favorites.filter(f => f.url !== station.url);
         console.log(`Removed ${station.name} from favorites`);
     }
     saveFavorites(favorites);
+
+    // Update the specific option's favorite status
+    if (index >= 0) {
+        const option = stationSelect.querySelector(`option[value="${index}"]`);
+        if (option) {
+            option.classList.toggle('favorited', isNowFavorite);
+        }
+
+        // Update or move to/from favorites optgroup
+        let favGroup = stationSelect.querySelector('optgroup[label="Favorites"]');
+        if (isNowFavorite) {
+            if (!favGroup) {
+                favGroup = document.createElement('optgroup');
+                favGroup.label = 'Favorites';
+                stationSelect.insertBefore(favGroup, stationSelect.firstChild.nextSibling);
+            }
+            const favOption = document.createElement('option');
+            favOption.value = index;
+            favOption.textContent = `${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
+            favOption.classList.add('favorited');
+            if (station.votes > 100) favOption.classList.add('high-votes');
+            else if (station.votes < 10) favOption.classList.add('low-votes');
+            else favOption.classList.add('medium-votes');
+            favGroup.appendChild(favOption);
+        } else if (favGroup) {
+            const favOption = favGroup.querySelector(`option[value="${index}"]`);
+            if (favOption) favOption.remove();
+            if (favGroup.childElementCount === 0) favGroup.remove();
+        }
+    }
+
     updateFavoriteButton();
-    renderStationList();
 }
 
 function updateFavoriteButton() {
@@ -555,19 +589,11 @@ function renderStationList() {
     stationSelect.innerHTML = '<option value="">Select Station</option>';
     const favorites = getFavorites();
 
+    // Create favorites optgroup if there are favorites
+    let favGroup = null;
     if (favorites.length > 0) {
-        const favGroup = document.createElement('optgroup');
+        favGroup = document.createElement('optgroup');
         favGroup.label = 'Favorites';
-        favorites.forEach((station) => {
-            const index = stations.findIndex(s => s.url === station.url);
-            if (index !== -1) {
-                const option = document.createElement('option');
-                option.value = index;
-                option.textContent = `${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
-                option.classList.add('favorited');
-                favGroup.appendChild(option);
-            }
-        });
         stationSelect.appendChild(favGroup);
     }
 
@@ -575,21 +601,33 @@ function renderStationList() {
     const start = performance.now();
     const renderBatch = () => {
         const fragment = document.createDocumentFragment();
+        const favFragment = favGroup ? document.createDocumentFragment() : null;
         const end = Math.min(index + BATCH_SIZE, stations.length);
+
         for (; index < end; index++) {
             const station = stations[index];
+            const isFav = isFavorite(station);
             const option = document.createElement('option');
             option.value = index;
             option.textContent = `${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
-            if (isFavorite(station)) option.classList.add('favorited');
+            option.classList.toggle('favorited', isFav);
             if (station.votes > 100) option.classList.add('high-votes');
             else if (station.votes < 10) option.classList.add('low-votes');
             else option.classList.add('medium-votes');
+
+            // Place in favorites group or regular list
+            if (isFav && favFragment) {
+                favFragment.appendChild(option.cloneNode(true));
+            }
             fragment.appendChild(option);
         }
+
         stationSelect.appendChild(fragment);
-        if (index < stations.length) requestAnimationFrame(renderBatch);
-        else {
+        if (favFragment) favGroup.appendChild(favFragment);
+
+        if (index < stations.length) {
+            requestAnimationFrame(renderBatch);
+        } else {
             stationSelect.disabled = false;
             console.log(`Station list rendered: ${stations.length} stations in ${performance.now() - start}ms`);
             showLoading(false);
@@ -597,6 +635,7 @@ function renderStationList() {
             updateFavoriteButton();
         }
     };
+
     console.log('Starting station list render...');
     requestAnimationFrame(renderBatch);
 }
@@ -826,7 +865,6 @@ function updatePlayerDisplay() {
     const nowPlaying = document.getElementById('nowPlaying');
     const stationImage = document.getElementById('stationImage');
     const stationIcon = document.getElementById('stationIcon');
-    const span = nowPlaying.querySelector('span');
     playPauseBtn.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
     playPauseBtn.disabled = !currentStation || isOffline;
     stopBtn.disabled = !currentStation || isOffline;
@@ -834,12 +872,12 @@ function updatePlayerDisplay() {
     previousBtn.disabled = !currentStation || stations.length <= 1 || currentIndex === 0 || isOffline;
     nextBtn.disabled = !currentStation || stations.length <= 1 || currentIndex === stations.length - 1 || currentIndex === -1 || isOffline;
     if (currentStation) {
-        span.textContent = `Now Playing: ${currentStation.name}${currentStation.language ? ` (${normalizeLanguage(currentStation.language)})` : ''}`;
-        const isOverflowing = span.scrollWidth > nowPlaying.clientWidth;
+        nowPlaying.querySelector('span').textContent = `Now Playing: ${currentStation.name}${currentStation.language ? ` (${normalizeLanguage(currentStation.language)})` : ''}`;
+        const isOverflowing = nowPlaying.querySelector('span').scrollWidth > nowPlaying.clientWidth;
         nowPlaying.classList.toggle('overflowing', isOverflowing);
         nowPlaying.classList.toggle('playing', isPlaying);
     } else {
-        span.textContent = 'Select a station to play';
+        nowPlaying.querySelector('span').textContent = 'Select a station to play';
         nowPlaying.classList.remove('playing', 'overflowing');
         stationImage.style.display = 'none';
         stationIcon.style.display = 'flex';
@@ -872,7 +910,7 @@ function stopHeartbeat() {
     if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
         heartbeatTimer = null;
-        console.log('Heartbeat stopped', new Error().stack.split('\n')[2]);
+        console.log('Heartbeat stopped');
     }
 }
 
@@ -1132,7 +1170,6 @@ function searchStations(query) {
     const clearBtn = document.getElementById('clearSearchBtn');
     
     if (!query) {
-        // When query is empty, filter by selected language
         filterStationsByLanguage(selectedLanguage);
         renderStationList();
         clearBtn.style.display = 'none';
@@ -1140,7 +1177,6 @@ function searchStations(query) {
     }
 
     const lowercaseQuery = query.toLowerCase();
-    // Filter stations by query and respect selected language
     stations = countryStations.filter(station => {
         const matchesLanguage = !selectedLanguage || normalizeLanguage(station.language) === selectedLanguage;
         return matchesLanguage && station.name.toLowerCase().includes(lowercaseQuery);
@@ -1162,7 +1198,6 @@ function clearSearch() {
     const isKeyboardVisible = document.activeElement === searchInput;
     
     searchInput.value = '';
-    // Filter stations by selected language instead of resetting to all
     filterStationsByLanguage(selectedLanguage);
     renderStationList();
     clearBtn.style.display = 'none';
