@@ -331,15 +331,109 @@ async function initializeApp(retryCount = 0) {
         populateCountryDropdown(STATIC_COUNTRIES);
         const userCountryCode = await getUserCountryCode();
         const validCountry = STATIC_COUNTRIES.some(c => c.code === userCountryCode);
-        const selectedCountry = validCountry ? userCountryCode : 'IN';
+        let selectedCountry = validCountry ? userCountryCode : 'IN';
+
+        // Check for last played station
+        let lastStation = null;
+        try {
+            lastStation = JSON.parse(localStorage.getItem('lastStation'));
+            console.log('Last station retrieved from localStorage:', lastStation);
+        } catch (err) {
+            console.warn('Failed to parse lastStation from localStorage:', err.message);
+            localStorage.removeItem('lastStation');
+        }
+
+        if (lastStation && lastStation.countrycode && STATIC_COUNTRIES.some(c => c.code.toUpperCase() === lastStation.countrycode.toUpperCase())) {
+            selectedCountry = lastStation.countrycode.toUpperCase();
+            console.log('Setting country from last station:', selectedCountry);
+        } else if (lastStation) {
+            console.warn('Last station has invalid countrycode, clearing:', lastStation.countrycode);
+            localStorage.removeItem('lastStation');
+            lastStation = null;
+        }
+
         countrySelect.value = selectedCountry;
         lastSelectedCountry = selectedCountry;
         console.log('Selected country:', selectedCountry);
         updateFlagDisplay(selectedCountry);
         await fetchAndDisplayAllStations(selectedCountry);
+
+        // Restore language from last station
+        if (lastStation && lastStation.language) {
+            selectedLanguage = normalizeLanguage(lastStation.language) || '';
+            console.log('Restoring language from last station:', selectedLanguage);
+            if (selectedLanguage) {
+                filterStationsByLanguage(selectedLanguage);
+                populateLanguageDropdown();
+                document.getElementById('languageSelect').value = selectedLanguage;
+            }
+        }
+
+        // Restore last station if available
+        if (lastStation && !isOffline) {
+            console.log('Attempting to restore last station:', lastStation.name);
+            const station = countryStations.find(s => s.url === lastStation.url);
+            if (station) {
+                console.log('Last station found in countryStations:', station.name);
+                currentStation = station;
+                const stationIndex = stations.indexOf(station);
+                if (stationIndex !== -1) {
+                    document.getElementById('stationSelect').value = stationIndex;
+                    console.log('Station selected in dropdown:', stationIndex);
+                } else {
+                    console.warn('Station not found in filtered stations list');
+                }
+
+                // Set up station image
+                stationImage.classList.add('loading');
+                stationIcon.style.display = 'none';
+                if (station.favicon && station.favicon.match(/^https?:\/\//)) {
+                    console.log('Attempting to load last station favicon:', station.favicon);
+                    stationImage.src = station.favicon;
+                    stationImage.style.display = 'block';
+                    stationImage.onerror = () => {
+                        console.warn('Last station favicon failed to load, falling back to default:', station.favicon);
+                        stationImage.style.display = 'none';
+                        stationIcon.style.display = 'flex';
+                        stationImage.classList.remove('loading');
+                    };
+                    stationImage.onload = () => {
+                        console.log('Last station favicon loaded successfully:', station.favicon);
+                        stationImage.style.display = 'block';
+                        stationIcon.style.display = 'none';
+                        stationImage.classList.remove('loading');
+                    };
+                } else {
+                    console.log('No valid favicon for last station, using default icon:', station.favicon);
+                    stationImage.style.display = 'none';
+                    stationIcon.style.display = 'flex';
+                    stationImage.classList.remove('loading');
+                }
+
+                updatePlayerDisplay();
+                if (userInteracted) {
+                    console.log('User interacted, attempting to play last station');
+                    await playStation(station);
+                } else {
+                    console.log('No user interaction, showing restore message for station:', station.name);
+                    showError(`Your last station, ${station.name}, is ready!\nTap play to listen.`);
+                }
+            } else {
+                console.warn('Last station not found in countryStations, clearing lastStation');
+                localStorage.removeItem('lastStation');
+            }
+        }
+
+        // Populate language dropdown if no language was restored
+        if (!selectedLanguage) {
+            populateLanguageDropdown();
+        }
+
         stationsFailedToLoad = false;
         document.getElementById('volumeLevel').textContent = `${Math.round(audio.volume * 100)}%`;
-        clearError();
+        if (!lastStation || !currentStation) {
+            clearError();
+        }
         console.log('App initialized successfully');
     } catch (error) {
         console.error('Initialization failed:', error.message);
@@ -530,7 +624,6 @@ function toggleFavorite(station) {
     const index = stations.findIndex(s => s.url === station.url);
     const isNowFavorite = !isFavorite(station);
 
-    // Update favorites array
     if (isNowFavorite) {
         favorites.push(station);
         console.log(`Added ${station.name} to favorites`);
@@ -540,14 +633,12 @@ function toggleFavorite(station) {
     }
     saveFavorites(favorites);
 
-    // Update the specific option's favorite status
     if (index >= 0) {
         const option = stationSelect.querySelector(`option[value="${index}"]`);
         if (option) {
             option.classList.toggle('favorited', isNowFavorite);
         }
 
-        // Update or move to/from favorites optgroup
         let favGroup = stationSelect.querySelector('optgroup[label="Favorites"]');
         if (isNowFavorite) {
             if (!favGroup) {
@@ -589,7 +680,6 @@ function renderStationList() {
     stationSelect.innerHTML = '<option value="">Select Station</option>';
     const favorites = getFavorites();
 
-    // Create favorites optgroup if there are favorites
     let favGroup = null;
     if (favorites.length > 0) {
         favGroup = document.createElement('optgroup');
@@ -615,7 +705,6 @@ function renderStationList() {
             else if (station.votes < 10) option.classList.add('low-votes');
             else option.classList.add('medium-votes');
 
-            // Place in favorites group or regular list
             if (isFav && favFragment) {
                 favFragment.appendChild(option.cloneNode(true));
             }
@@ -631,7 +720,6 @@ function renderStationList() {
             stationSelect.disabled = false;
             console.log(`Station list rendered: ${stations.length} stations in ${performance.now() - start}ms`);
             showLoading(false);
-            populateLanguageDropdown();
             updateFavoriteButton();
         }
     };
