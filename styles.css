@@ -77,7 +77,7 @@ select, input[type="text"] {
     padding: 8px 12px;
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    background: var(--card Grok-bg);
+    background: var(--card-bg);
     color: var(--text-light);
     width: 100%;
     font-size: 0.95em;
@@ -100,7 +100,7 @@ input[type="text"]::placeholder {
 #stationSearch {
     padding-left: 35px;
     padding-right: 40px;
-    background:#1e2a3a url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%23ffffff" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>') no-repeat 10px center;
+    background: var(--card-bg) url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%23ffffff" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>') no-repeat 10px center;
     background-size: 16px;
     box-sizing: border-box;
     position: relative;
@@ -147,6 +147,10 @@ input[type="text"]::placeholder {
     background-repeat: no-repeat;
     background-position: 10px center;
     background-size: 24px 16px;
+    color: #000000;
+}
+
+#stationSelect option optgroup{
     color: #000000;
 }
 
@@ -289,6 +293,7 @@ button.active {
     overflow: hidden;
     box-shadow: var(--shadow-light);
     position: relative;
+    transition: opacity 0.3s ease;
 }
 
 #stationImage {
@@ -296,18 +301,51 @@ button.active {
     height: 100%;
     object-fit: contain;
     transition: opacity 0.3s ease;
-    display: none;
+    opacity: 0;
+    display: block;
 }
 
 #stationImage.loading {
     opacity: 0.5;
 }
 
+#stationImage.loaded {
+    opacity: 1;
+}
+
 #stationIcon {
-    font-size: 1.8em;
-    color: var(--primary);
-    display: flex;
+    font-size: 3em; /* Larger for better visibility */
+    background: linear-gradient(45deg, var(--primary), var(--secondary)); /* Theme-consistent gradient */
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    display: none; /* Hidden by default */
     align-self: center;
+    transition: opacity 0.3s ease;
+    opacity: 0;
+    filter: drop-shadow(0 0 10px rgba(0, 180, 216, 0.5)); /* Subtle glow */
+    aria-hidden: true; /* Decorative icon */
+}
+
+#stationIcon.loading {
+    display: flex; /* Show when loading */
+    opacity: 1;
+    animation: iconPulse 2.5s infinite ease-in-out; /* Smooth, user-friendly pulse */
+}
+
+@keyframes iconPulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.15); /* Gentle scale for responsiveness */
+        opacity: 0.85; /* Slight fade for softness */
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 .player-controls-group {
@@ -432,6 +470,10 @@ button.active {
     color: var(--secondary);
 }
 
+.favorited {
+    color: #f1c40f; /* Gold color */
+}
+
 @media (max-width: 600px) {
     body { padding: 10px; }
     .container { padding-bottom: 100px; }
@@ -459,5 +501,9 @@ button.active {
         width: 20px;
         height: 20px;
         font-size: 1em;
+    }
+    #stationIcon {
+        font-size: 2.2em; /* Smaller for mobile */
+        filter: drop-shadow(0 0 8px rgba(0, 180, 216, 0.5)); /* Slightly reduced glow */
     }
 }
