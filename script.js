@@ -12,7 +12,7 @@ const SKIP_STREAM_TEST = true;
 const BATCH_SIZE = 50;
 const HEARTBEAT_INTERVAL = 5000;
 const CACHE_KEY = 'world_fm_radio_stations';
-const CACHE_DURATION = 1 * 60 * 60 * 1000;
+const CACHE_DURATION = 12 * 60 * 60 * 1000;
 const AUDIO_ERROR_RETRY_DELAY = 2000;
 const MAX_AUDIO_ERROR_RETRIES = 5;
 const INIT_RETRY_DELAY = 2000;
@@ -45,6 +45,8 @@ let errorDebounceTimeout = null;
 let isOffline = !navigator.onLine;
 let userInteracted = false;
 
+const failedFaviconCache = new Set();
+
 const keepAliveAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
 keepAliveAudio.loop = true;
 keepAliveAudio.volume = 0;
@@ -63,6 +65,71 @@ document.addEventListener('click', () => {
         keepAliveAudio.play().catch(err => console.warn('Keep-alive audio failed to start:', err));
     }).catch(err => console.error('Failed to resume audio context:', err));
 }, { once: true });
+
+function updateStationVisuals(station = null, forceReset = false) {
+    const stationImage = document.getElementById('stationImage');
+    const stationIcon = document.getElementById('stationIcon');
+
+    if (!stationImage || !stationIcon) {
+        console.error('Station image or icon element missing', { stationImage, stationIcon });
+        return;
+    }
+
+    if (!station || forceReset) {
+        stationImage.style.display = 'none';
+        stationImage.src = '';
+        stationImage.alt = '';
+        stationImage.classList.remove('loading', 'loaded');
+        stationIcon.classList.add('loading');
+        stationIcon.style.display = 'flex';
+        console.log('Station visuals reset to default icon');
+        return;
+    }
+
+    const favicon = station.favicon && station.favicon.match(/^https?:\/\//) ? station.favicon : null;
+    if (!favicon || failedFaviconCache.has(favicon)) {
+        stationImage.style.display = 'none';
+        stationImage.alt = '';
+        stationImage.classList.remove('loading', 'loaded');
+        stationIcon.classList.add('loading');
+        stationIcon.style.display = 'flex';
+        console.log('Showing default icon due to invalid or failed favicon', { station: station.name, favicon });
+        return;
+    }
+
+    stationImage.classList.add('loading');
+    stationImage.style.display = 'block';
+    stationImage.alt = `Logo for ${station.name}`;
+    stationImage.src = favicon;
+    stationIcon.classList.remove('loading');
+    stationIcon.style.display = 'none';
+    console.log('Loading favicon', { station: station.name, favicon });
+
+    const onLoad = () => {
+        stationImage.classList.remove('loading');
+        stationImage.classList.add('loaded');
+        stationImage.style.display = 'block';
+        stationIcon.style.display = 'none';
+        console.log('Favicon loaded successfully', { station: station.name, favicon });
+        stationImage.removeEventListener('load', onLoad);
+        stationImage.removeEventListener('error', onError);
+    };
+
+    const onError = () => {
+        failedFaviconCache.add(favicon);
+        stationImage.style.display = 'none';
+        stationImage.alt = '';
+        stationImage.classList.remove('loading', 'loaded');
+        stationIcon.classList.add('loading');
+        stationIcon.style.display = 'flex';
+        console.warn('Favicon failed to load, showing default icon', { station: station.name, favicon });
+        stationImage.removeEventListener('load', onLoad);
+        stationImage.removeEventListener('error', onError);
+    };
+
+    stationImage.addEventListener('load', onLoad, { once: true });
+    stationImage.addEventListener('error', onError, { once: true });
+}
 
 function getAudioErrorMessage(error) {
     if (!error) return "Oops! Something went wrong with the music.";
@@ -320,10 +387,7 @@ async function initializeApp(retryCount = 0) {
     }
 
     showLoading(true);
-    const stationImage = document.getElementById('stationImage');
-    const stationIcon = document.getElementById('stationIcon');
-    stationImage.style.display = 'none';
-    stationIcon.style.display = 'flex';
+    updateStationVisuals();
 
     try {
         const countrySelect = document.getElementById('countrySelect');
@@ -333,7 +397,6 @@ async function initializeApp(retryCount = 0) {
         const validCountry = STATIC_COUNTRIES.some(c => c.code === userCountryCode);
         let selectedCountry = validCountry ? userCountryCode : 'IN';
 
-        // Check for last played station
         let lastStation = null;
         try {
             lastStation = JSON.parse(localStorage.getItem('lastStation'));
@@ -358,7 +421,6 @@ async function initializeApp(retryCount = 0) {
         updateFlagDisplay(selectedCountry);
         await fetchAndDisplayAllStations(selectedCountry);
 
-        // Restore language from last station
         if (lastStation && lastStation.language) {
             selectedLanguage = normalizeLanguage(lastStation.language) || '';
             console.log('Restoring language from last station:', selectedLanguage);
@@ -369,47 +431,13 @@ async function initializeApp(retryCount = 0) {
             }
         }
 
-        // Restore last station if available
         if (lastStation && !isOffline) {
             console.log('Attempting to restore last station:', lastStation.name);
             const station = countryStations.find(s => s.url === lastStation.url);
             if (station) {
                 console.log('Last station found in countryStations:', station.name);
                 currentStation = station;
-                const stationIndex = stations.indexOf(station);
-                if (stationIndex !== -1) {
-                    document.getElementById('stationSelect').value = stationIndex;
-                    console.log('Station selected in dropdown:', stationIndex);
-                } else {
-                    console.warn('Station not found in filtered stations list');
-                }
-
-                // Set up station image
-                stationImage.classList.add('loading');
-                stationIcon.style.display = 'none';
-                if (station.favicon && station.favicon.match(/^https?:\/\//)) {
-                    console.log('Attempting to load last station favicon:', station.favicon);
-                    stationImage.src = station.favicon;
-                    stationImage.style.display = 'block';
-                    stationImage.onerror = () => {
-                        console.warn('Last station favicon failed to load, falling back to default:', station.favicon);
-                        stationImage.style.display = 'none';
-                        stationIcon.style.display = 'flex';
-                        stationImage.classList.remove('loading');
-                    };
-                    stationImage.onload = () => {
-                        console.log('Last station favicon loaded successfully:', station.favicon);
-                        stationImage.style.display = 'block';
-                        stationIcon.style.display = 'none';
-                        stationImage.classList.remove('loading');
-                    };
-                } else {
-                    console.log('No valid favicon for last station, using default icon:', station.favicon);
-                    stationImage.style.display = 'none';
-                    stationIcon.style.display = 'flex';
-                    stationImage.classList.remove('loading');
-                }
-
+                updateStationVisuals(station);
                 updatePlayerDisplay();
                 if (userInteracted) {
                     console.log('User interacted, attempting to play last station');
@@ -424,7 +452,6 @@ async function initializeApp(retryCount = 0) {
             }
         }
 
-        // Populate language dropdown if no language was restored
         if (!selectedLanguage) {
             populateLanguageDropdown();
         }
@@ -596,7 +623,7 @@ function handleLanguageChange(e) {
     selectedLanguage = e.target.value;
     console.log('Language changed to:', selectedLanguage);
     filterStationsByLanguage(selectedLanguage);
-    renderStationList();
+    renderStationList(true); // Indicate language change to prevent auto-selection
 }
 
 function filterStationsByLanguage(language) {
@@ -619,6 +646,7 @@ function isFavorite(station) {
 
 function toggleFavorite(station) {
     if (!station) return;
+    console.log(`Toggling favorite for ${station.name}`);
     let favorites = getFavorites();
     const stationSelect = document.getElementById('stationSelect');
     const index = stations.findIndex(s => s.url === station.url);
@@ -634,30 +662,52 @@ function toggleFavorite(station) {
     saveFavorites(favorites);
 
     if (index >= 0) {
-        const option = stationSelect.querySelector(`option[value="${index}"]`);
-        if (option) {
-            option.classList.toggle('favorited', isNowFavorite);
+        // Update main list option
+        const mainOption = stationSelect.querySelector(`option[value="main-${index}"]`);
+        if (mainOption) {
+            mainOption.textContent = isNowFavorite
+                ? `★ ${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`
+                : `${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
+            mainOption.classList.toggle('favorited', isNowFavorite);
+            mainOption.setAttribute('aria-label', isNowFavorite ? `Favorite: ${station.name}` : station.name);
+            console.log(`Updated main option for ${station.name}`, { isFavorite: isNowFavorite });
         }
 
+        // Update favorites optgroup
         let favGroup = stationSelect.querySelector('optgroup[label="Favorites"]');
         if (isNowFavorite) {
             if (!favGroup) {
                 favGroup = document.createElement('optgroup');
                 favGroup.label = 'Favorites';
                 stationSelect.insertBefore(favGroup, stationSelect.firstChild.nextSibling);
+                console.log('Created Favorites optgroup');
             }
             const favOption = document.createElement('option');
-            favOption.value = index;
-            favOption.textContent = `${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
+            favOption.value = `fav-${index}`;
+            favOption.textContent = `★ ${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
             favOption.classList.add('favorited');
+            favOption.setAttribute('aria-label', `Favorite: ${station.name}`);
             if (station.votes > 100) favOption.classList.add('high-votes');
             else if (station.votes < 10) favOption.classList.add('low-votes');
             else favOption.classList.add('medium-votes');
             favGroup.appendChild(favOption);
+            console.log(`Added ${station.name} to Favorites optgroup`);
         } else if (favGroup) {
-            const favOption = favGroup.querySelector(`option[value="${index}"]`);
-            if (favOption) favOption.remove();
-            if (favGroup.childElementCount === 0) favGroup.remove();
+            const favOption = favGroup.querySelector(`option[value="fav-${index}"]`);
+            if (favOption) {
+                favOption.remove();
+                console.log(`Removed ${station.name} from Favorites optgroup`);
+            }
+            if (favGroup.childElementCount === 0) {
+                favGroup.remove();
+                console.log('Removed empty Favorites optgroup');
+            }
+        }
+
+        // Ensure current station is selected in main list
+        if (station.url === currentStation?.url) {
+            stationSelect.value = `main-${index}`;
+            console.log(`Selected current station in main list: ${station.name}`, { index });
         }
     }
 
@@ -675,7 +725,7 @@ function updateFavoriteButton() {
     }
 }
 
-function renderStationList() {
+function renderStationList(isLanguageChange = false) {
     const stationSelect = document.getElementById('stationSelect');
     stationSelect.innerHTML = '<option value="">Select Station</option>';
     const favorites = getFavorites();
@@ -697,16 +747,28 @@ function renderStationList() {
         for (; index < end; index++) {
             const station = stations[index];
             const isFav = isFavorite(station);
+            console.log('Rendering station:', { name: station.name, isFavorite: isFav });
             const option = document.createElement('option');
-            option.value = index;
-            option.textContent = `${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
+            option.value = `main-${index}`;
+            option.textContent = isFav
+                ? `★ ${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`
+                : `${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
             option.classList.toggle('favorited', isFav);
+            option.setAttribute('aria-label', isFav ? `Favorite: ${station.name}` : station.name);
             if (station.votes > 100) option.classList.add('high-votes');
             else if (station.votes < 10) option.classList.add('low-votes');
             else option.classList.add('medium-votes');
 
             if (isFav && favFragment) {
-                favFragment.appendChild(option.cloneNode(true));
+                const favOption = document.createElement('option');
+                favOption.value = `fav-${index}`;
+                favOption.textContent = `★ ${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
+                favOption.classList.add('favorited');
+                favOption.setAttribute('aria-label', `Favorite: ${station.name}`);
+                if (station.votes > 100) favOption.classList.add('high-votes');
+                else if (station.votes < 10) favOption.classList.add('low-votes');
+                else favOption.classList.add('medium-votes');
+                favFragment.appendChild(favOption);
             }
             fragment.appendChild(option);
         }
@@ -721,10 +783,17 @@ function renderStationList() {
             console.log(`Station list rendered: ${stations.length} stations in ${performance.now() - start}ms`);
             showLoading(false);
             updateFavoriteButton();
+            if (!isLanguageChange && currentStation) {
+                const currentIndex = stations.findIndex(s => s.url === currentStation.url);
+                if (currentIndex >= 0) {
+                    stationSelect.value = `main-${currentIndex}`;
+                    console.log(`Restored current station selection: ${currentStation.name}`, { currentIndex });
+                }
+            }
         }
     };
 
-    console.log('Starting station list render...');
+    console.log('Starting station list render...', { isLanguageChange });
     requestAnimationFrame(renderBatch);
 }
 
@@ -766,33 +835,7 @@ async function playStation(station) {
     audio.load();
     currentStation = station;
 
-    const stationImage = document.getElementById('stationImage');
-    const stationIcon = document.getElementById('stationIcon');
-    stationImage.classList.add('loading');
-    stationIcon.style.display = 'none';
-
-    if (station.favicon && station.favicon.match(/^https?:\/\//)) {
-        console.log('Attempting to load favicon:', station.favicon);
-        stationImage.src = station.favicon;
-        stationImage.style.display = 'block';
-        stationImage.onerror = () => {
-            console.warn('Station favicon failed to load, falling back to default:', station.favicon);
-            stationImage.style.display = 'none';
-            stationIcon.style.display = 'flex';
-            stationImage.classList.remove('loading');
-        };
-        stationImage.onload = () => {
-            console.log('Station favicon loaded successfully:', station.favicon);
-            stationImage.style.display = 'block';
-            stationIcon.style.display = 'none';
-            stationImage.classList.remove('loading');
-        };
-    } else {
-        console.log('No valid favicon available, using default icon:', station.favicon);
-        stationImage.style.display = 'none';
-        stationIcon.style.display = 'flex';
-        stationImage.classList.remove('loading');
-    }
+    updateStationVisuals(station);
 
     try {
         let url = station.url_resolved || station.url;
@@ -831,7 +874,7 @@ async function playStation(station) {
         isPlaying = true;
         hasError = false;
         const stationIndex = stations.indexOf(station);
-        if (stationIndex !== -1) document.getElementById('stationSelect').value = stationIndex;
+        if (stationIndex >= 0) document.getElementById('stationSelect').value = `main-${stationIndex}`;
         clearError();
         updatePlayerDisplay();
         updateMediaSession();
@@ -951,14 +994,14 @@ function updatePlayerDisplay() {
     const previousBtn = document.getElementById('previousBtn');
     const nextBtn = document.getElementById('nextBtn');
     const nowPlaying = document.getElementById('nowPlaying');
-    const stationImage = document.getElementById('stationImage');
-    const stationIcon = document.getElementById('stationIcon');
+
     playPauseBtn.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
     playPauseBtn.disabled = !currentStation || isOffline;
     stopBtn.disabled = !currentStation || isOffline;
     const currentIndex = currentStation ? stations.indexOf(currentStation) : -1;
     previousBtn.disabled = !currentStation || stations.length <= 1 || currentIndex === 0 || isOffline;
     nextBtn.disabled = !currentStation || stations.length <= 1 || currentIndex === stations.length - 1 || currentIndex === -1 || isOffline;
+
     if (currentStation) {
         nowPlaying.querySelector('span').textContent = `Now Playing: ${currentStation.name}${currentStation.language ? ` (${normalizeLanguage(currentStation.language)})` : ''}`;
         const isOverflowing = nowPlaying.querySelector('span').scrollWidth > nowPlaying.clientWidth;
@@ -967,8 +1010,7 @@ function updatePlayerDisplay() {
     } else {
         nowPlaying.querySelector('span').textContent = 'Select a station to play';
         nowPlaying.classList.remove('playing', 'overflowing');
-        stationImage.style.display = 'none';
-        stationIcon.style.display = 'flex';
+        updateStationVisuals();
     }
     updateFavoriteButton();
     console.log('Player display updated', { isPlaying, currentStation: currentStation?.name });
@@ -1017,12 +1059,11 @@ function stopPlayback() {
     currentStation = null;
     stopHeartbeat();
     stopSilenceDetection();
+    updateStationVisuals(null, true);
     updatePlayerDisplay();
     clearError();
     releaseWakeLock();
     keepAliveAudio.pause();
-    document.getElementById('stationImage').style.display = 'none';
-    document.getElementById('stationIcon').style.display = 'flex';
     localStorage.removeItem('lastStation');
     setTimeout(() => { isStopping = false; }, 100);
     showError('The playback has been interrupted.');
@@ -1034,10 +1075,10 @@ function previousStation() {
         return;
     }
     const stationSelect = document.getElementById('stationSelect');
-    const currentIndex = parseInt(stationSelect.value, 10);
+    const currentIndex = parseInt(stationSelect.value.replace('main-', '').replace('fav-', ''), 10);
     if (currentIndex > 0) {
         console.log('Switching to previous station', { currentIndex });
-        stationSelect.value = currentIndex - 1;
+        stationSelect.value = `main-${currentIndex - 1}`;
         playStation(stations[currentIndex - 1]);
     } else {
         console.log('No previous station available');
@@ -1050,27 +1091,30 @@ function nextStation() {
         return;
     }
     const stationSelect = document.getElementById('stationSelect');
-    const currentIndex = parseInt(stationSelect.value, 10);
+    const currentIndex = parseInt(stationSelect.value.replace('main-', '').replace('fav-', ''), 10);
     if (isNaN(currentIndex) || currentIndex < 0) {
         console.log('No current station, starting from first');
-        stationSelect.value = 0;
+        stationSelect.value = 'main-0';
         playStation(stations[0]);
     } else if (currentIndex < stations.length - 1) {
         console.log('Switching to next station', { currentIndex });
-        stationSelect.value = currentIndex + 1;
+        stationSelect.value = `main-${currentIndex + 1}`;
         playStation(stations[currentIndex + 1]);
     } else {
         console.log('Reached end, looping to first station');
-        stationSelect.value = 0;
+        stationSelect.value = 'main-0';
         playStation(stations[0]);
     }
 }
 
 document.getElementById('stationSelect').addEventListener('change', (e) => {
-    const index = parseInt(e.target.value, 10);
-    if (!isNaN(index) && index >= 0 && index < stations.length) {
-        console.log('Station selected from dropdown:', stations[index].name);
-        playStation(stations[index]);
+    const value = e.target.value;
+    if (value) {
+        const index = parseInt(value.replace('main-', '').replace('fav-', ''), 10);
+        if (!isNaN(index) && index >= 0 && index < stations.length) {
+            console.log('Station selected from dropdown:', stations[index].name);
+            playStation(stations[index]);
+        }
     }
 });
 
