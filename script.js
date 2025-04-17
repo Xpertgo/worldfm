@@ -44,7 +44,7 @@ let lastSelectedCountry = null;
 let errorDebounceTimeout = null;
 let isOffline = !navigator.onLine;
 let userInteracted = false;
-let selectedFromFavorites = false; // Tracks if current station was selected from Favorites
+let selectedFromFavorites = false;
 
 const failedFaviconCache = new Set();
 
@@ -509,7 +509,9 @@ async function fetchAndDisplayAllStations(countryCode) {
             console.log('Stations cached successfully');
         }
         countryStations = mergeDuplicateStations(allStations);
+        selectedLanguage = ''; // Reset selected language on country change
         filterStationsByLanguage(selectedLanguage);
+        populateLanguageDropdown(); // Repopulate language dropdown with new country's languages
         console.log('Rendering station list...', { stationCount: stations.length });
         renderStationList();
     } catch (error) {
@@ -518,6 +520,7 @@ async function fetchAndDisplayAllStations(countryCode) {
         showError('No stations loaded.\nPlease try another country or check your connection.');
         stations = [];
         renderStationList();
+        populateLanguageDropdown(); // Ensure language dropdown is updated even on error
     } finally {
         showLoading(false);
     }
@@ -551,8 +554,9 @@ function handleCountryChange(e) {
     updateFlagDisplay(countryCode);
     if (countryCode) {
         clearError();
-        selectedLanguage = '';
+        selectedLanguage = ''; // Reset language selection
         lastSelectedCountry = countryCode;
+        document.getElementById('languageSelect').value = ''; // Clear language dropdown selection
         fetchAndDisplayAllStations(countryCode).catch((err) => {
             console.error('Country change failed:', err.message);
             stationsFailedToLoad = true;
@@ -597,6 +601,10 @@ function normalizeLanguage(rawLanguage) {
 
 function populateLanguageDropdown() {
     const languageSelect = document.getElementById('languageSelect');
+    if (!languageSelect) {
+        console.error('Language select element not found');
+        return;
+    }
     const languageCounts = new Map();
     countryStations.forEach(station => {
         const normalizedLanguage = normalizeLanguage(station.language);
@@ -614,7 +622,7 @@ function populateLanguageDropdown() {
         languageSelect.appendChild(option);
     });
     languageSelect.value = selectedLanguage || '';
-    languageSelect.disabled = false;
+    languageSelect.disabled = sortedLanguages.length === 0;
     languageSelect.removeEventListener('change', handleLanguageChange);
     languageSelect.addEventListener('change', handleLanguageChange);
     console.log('Language dropdown populated with', sortedLanguages.length, 'options');
@@ -624,7 +632,7 @@ function handleLanguageChange(e) {
     selectedLanguage = e.target.value;
     console.log('Language changed to:', selectedLanguage);
     filterStationsByLanguage(selectedLanguage);
-    renderStationList(true); // Indicate language change to prevent auto-selection
+    renderStationList(true);
 }
 
 function filterStationsByLanguage(language) {
@@ -663,7 +671,6 @@ function toggleFavorite(station) {
     saveFavorites(favorites);
 
     if (index >= 0) {
-        // Update main list option
         const mainOption = stationSelect.querySelector(`option[value="main-${index}"]`);
         if (mainOption) {
             mainOption.textContent = isNowFavorite
@@ -674,7 +681,6 @@ function toggleFavorite(station) {
             console.log(`Updated main option for ${station.name}`, { isFavorite: isNowFavorite });
         }
 
-        // Update favorites optgroup
         let favGroup = stationSelect.querySelector('optgroup[label="Favorites"]');
         if (isNowFavorite) {
             if (!favGroup) {
@@ -705,7 +711,6 @@ function toggleFavorite(station) {
             }
         }
 
-        // Set selection based on source
         if (station.url === currentStation?.url) {
             const selectValue = selectedFromFavorites && isNowFavorite ? `fav-${index}` : `main-${index}`;
             stationSelect.value = selectValue;
@@ -714,7 +719,7 @@ function toggleFavorite(station) {
     }
 
     updateFavoriteButton();
-    updatePlayerDisplay(); // Added to update button states after dropdown change
+    updatePlayerDisplay();
 }
 
 function updateFavoriteButton() {
@@ -903,11 +908,13 @@ async function playStation(station) {
 function showLoading(show) {
     const loading = document.getElementById('loading');
     const progressBar = document.getElementById('progressBar');
+    const player = document.querySelector('.player');
     
-    if (!loading || !progressBar) {
+    if (!loading || !progressBar || !player) {
         console.error('Loading elements not found in DOM', {
             loading: !!loading,
-            progressBar: !!progressBar
+            progressBar: !!progressBar,
+            player: !!player
         });
         return;
     }
@@ -915,6 +922,8 @@ function showLoading(show) {
     isLoading = show;
     loading.style.display = show ? 'block' : 'none';
     loading.setAttribute('aria-busy', show ? 'true' : 'false');
+    
+    player.classList.toggle('progress-active', show);
     
     let animationFrame = null;
     if (window.currentLoadingAnimation) {
@@ -1006,9 +1015,10 @@ function updatePlayerDisplay() {
 
     playPauseBtn.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
     playPauseBtn.disabled = !currentStation || isOffline;
+    playPauseBtn.classList.toggle('active', isPlaying);
+    
     stopBtn.disabled = !currentStation || isOffline;
 
-    // Get all valid options (exclude placeholder)
     const options = Array.from(stationSelect.options).filter(opt => opt.value !== '');
     const currentValue = stationSelect.value;
     let isFirstOption = false;
@@ -1102,7 +1112,7 @@ function previousStation() {
         return;
     }
     const stationSelect = document.getElementById('stationSelect');
-    const options = Array.from(stationSelect.options).filter(opt => opt.value !== ''); // Exclude "Select Station" placeholder
+    const options = Array.from(stationSelect.options).filter(opt => opt.value !== '');
     const currentValue = stationSelect.value;
 
     if (!currentValue || options.length <= 1) {
@@ -1118,7 +1128,7 @@ function previousStation() {
 
     let prevIndex = currentIndex - 1;
     if (prevIndex < 0) {
-        prevIndex = options.length - 1; // Wrap to last option
+        prevIndex = options.length - 1;
         console.log('Reached start, wrapping to last station');
     }
 
@@ -1139,7 +1149,7 @@ function previousStation() {
     });
 
     stationSelect.value = prevOption.value;
-    selectedFromFavorites = isFavoriteSelection; // Update selection source
+    selectedFromFavorites = isFavoriteSelection;
     playStation(stations[stationIndex]);
 }
 
@@ -1149,7 +1159,7 @@ function nextStation() {
         return;
     }
     const stationSelect = document.getElementById('stationSelect');
-    const options = Array.from(stationSelect.options).filter(opt => opt.value !== ''); // Exclude "Select Station" placeholder
+    const options = Array.from(stationSelect.options).filter(opt => opt.value !== '');
     const currentValue = stationSelect.value;
 
     if (!currentValue || options.length <= 1) {
@@ -1173,7 +1183,7 @@ function nextStation() {
 
     let nextIndex = currentIndex + 1;
     if (nextIndex >= options.length) {
-        nextIndex = 0; // Wrap to first option
+        nextIndex = 0;
         console.log('Reached end, wrapping to first station');
     }
 
@@ -1194,7 +1204,7 @@ function nextStation() {
     });
 
     stationSelect.value = nextOption.value;
-    selectedFromFavorites = isFavoriteSelection; // Update selection source
+    selectedFromFavorites = isFavoriteSelection;
     playStation(stations[stationIndex]);
 }
 
@@ -1205,7 +1215,7 @@ document.getElementById('stationSelect').addEventListener('change', (e) => {
         const index = parseInt(value.replace('main-', '').replace('fav-', ''), 10);
         if (!isNaN(index) && index >= 0 && index < stations.length) {
             console.log('Station selected from dropdown:', stations[index].name, { fromFavorites: isFavoriteSelection });
-            selectedFromFavorites = isFavoriteSelection; // Update selection source
+            selectedFromFavorites = isFavoriteSelection;
             playStation(stations[index]);
         }
     }
