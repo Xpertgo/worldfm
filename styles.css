@@ -6,6 +6,8 @@
     --text-light: #ffffff;
     --shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.2);
+    --glow-color: rgba(0, 180, 216, 0.7);
+    --progress-shadow: rgba(0, 180, 216, 0.5);
 }
 
 body {
@@ -198,8 +200,8 @@ button:disabled {
     box-shadow: none;
 }
 
-button.active {
-    animation: pulse 1.5s infinite;
+button#playPauseBtn.active {
+    animation: pulse 1.5s ease-in-out infinite;
 }
 
 #favoriteBtn.favorited {
@@ -230,6 +232,16 @@ button.active {
     transition: all 0.3s ease;
     z-index: 1000;
     max-width: 100%;
+}
+
+.player.progress-active {
+    animation: connecting 2s ease-in-out infinite;
+}
+
+@keyframes connecting {
+    0% { box-shadow: 0 0 5px rgba(0, 180, 216, 0.3); }
+    50% { box-shadow: 0 0 15px rgba(0, 180, 216, 0.7); }
+    100% { box-shadow: 0 0 5px rgba(0, 180, 216, 0.3); }
 }
 
 .now-playing {
@@ -314,23 +326,23 @@ button.active {
 }
 
 #stationIcon {
-    font-size: 3em; /* Larger for better visibility */
-    background: linear-gradient(45deg, var(--primary), var(--secondary)); /* Theme-consistent gradient */
+    font-size: 3em;
+    background: linear-gradient(45deg, var(--primary), var(--secondary));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    display: none; /* Hidden by default */
+    display: none;
     align-self: center;
     transition: opacity 0.3s ease;
     opacity: 0;
-    filter: drop-shadow(0 0 10px rgba(0, 180, 216, 0.5)); /* Subtle glow */
-    aria-hidden: true; /* Decorative icon */
+    filter: drop-shadow(0 0 10px rgba(0, 180, 216, 0.5));
+    aria-hidden: true;
 }
 
 #stationIcon.loading {
-    display: flex; /* Show when loading */
+    display: flex;
     opacity: 1;
-    animation: iconPulse 2.5s infinite ease-in-out; /* Smooth, user-friendly pulse */
+    animation: iconPulse 2.5s infinite ease-in-out;
 }
 
 @keyframes iconPulse {
@@ -339,8 +351,8 @@ button.active {
         opacity: 1;
     }
     50% {
-        transform: scale(1.15); /* Gentle scale for responsiveness */
-        opacity: 0.85; /* Slight fade for softness */
+        transform: scale(1.15);
+        opacity: 0.85;
     }
     100% {
         transform: scale(1);
@@ -363,16 +375,9 @@ button.active {
     flex-shrink: 0;
 }
 
-.player.connecting {
-    border-color: var(--primary);
-    animation: connecting 1.5s infinite;
-}
 
-@keyframes connecting {
-    0% { box-shadow: 0 0 5px rgba(0, 180, 216, 0.3); }
-    50% { box-shadow: 0 0 15px rgba(0, 180, 216, 0.7); }
-    100% { box-shadow: 0 0 5px rgba(0, 180, 216, 0.3); }
-}
+
+
 
 .progress-container {
     display: none;
@@ -471,7 +476,7 @@ button.active {
 }
 
 .favorited {
-    color: #f1c40f; /* Gold color */
+    color: #f1c40f;
 }
 
 @media (max-width: 600px) {
@@ -503,7 +508,7 @@ button.active {
         font-size: 1em;
     }
     #stationIcon {
-        font-size: 2.2em; /* Smaller for mobile */
-        filter: drop-shadow(0 0 8px rgba(0, 180, 216, 0.5)); /* Slightly reduced glow */
+        font-size: 2.2em;
+        filter: drop-shadow(0 0 8px rgba(0, 180, 216, 0.5));
     }
 }
