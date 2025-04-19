@@ -493,7 +493,7 @@ button#playPauseBtn.active {
     .volume-control { width: 100%; justify-content: center; }
     .progress-container { margin: 10px auto 90px auto; }
     .progress-bar { height: 6px; }
-    #volume { width: 65%; }
+    #volume { width: 63%; }
     .error-container { flex-wrap: wrap; justify-content: center; }
     .retry-button { padding: 6px 12px; font-size: 0.85em; min-width: 80px; }
     #stationSearch {
