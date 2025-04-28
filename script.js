@@ -1,5 +1,7 @@
+// script.js
 import { LANGUAGE_NORMALIZATION } from './languageNormalization.js';
 import { STATIC_COUNTRIES } from './staticCountries.js';
+import { CUSTOM_INDIAN_STATIONS } from './customStations.js';
 
 const API_SERVERS = [
     'https://all.api.radio-browser.info',
@@ -45,6 +47,7 @@ let errorDebounceTimeout = null;
 let isOffline = !navigator.onLine;
 let userInteracted = false;
 let selectedFromFavorites = false;
+let searchQuery = '';
 
 const failedFaviconCache = new Set();
 
@@ -375,7 +378,7 @@ async function getUserCountryCode() {
 
 async function initializeApp(retryCount = 0) {
     console.log('Initializing app...', { retryCount });
-    const requiredElements = ['countrySelect', 'volumeLevel', 'errorContainer', 'loading', 'stationImage', 'stationIcon'];
+    const requiredElements = ['countrySelect', 'volumeLevel', 'errorContainer', 'loading', 'stationImage', 'stationIcon', 'stationSearch', 'clearSearchBtn'];
     if (!requiredElements.every(id => document.getElementById(id))) {
         console.error('Required DOM elements missing:', requiredElements.filter(id => !document.getElementById(id)));
         if (retryCount < 3) {
@@ -477,7 +480,7 @@ function mergeDuplicateStations(stations) {
     const deduplicated = [];
     for (const station of stations) {
         const normalizedLanguage = normalizeLanguage(station.language);
-        const key = `${station.name.toLowerCase()}|${normalizedLanguage || 'unknown'}`;
+        const key = `${station.name.toLowerCase()}|${normalizedLanguage || 'unknown'}|${station.url}`;
         if (!seen.has(key)) {
             seen.set(key, station);
             deduplicated.push(station);
@@ -492,35 +495,67 @@ async function fetchAndDisplayAllStations(countryCode) {
     showLoading(true);
     try {
         const cacheKey = `${CACHE_KEY}_${countryCode}`;
-        const cachedData = localStorage.getItem(cacheKey);
         let allStations = null;
-        if (cachedData) {
-            const { data, timestamp } = JSON.parse(cachedData);
-            if (Date.now() - timestamp < CACHE_DURATION) {
-                console.log('Using cached stations for:', countryCode);
-                allStations = data;
+
+        if (countryCode.toUpperCase() === 'IN') {
+            // For India, use only CUSTOM_INDIAN_STATIONS
+            console.log('Using custom stations for India');
+            allStations = CUSTOM_INDIAN_STATIONS;
+            localStorage.setItem(cacheKey, JSON.stringify({ data: allStations, timestamp: Date.now() }));
+        } else {
+            // For other countries, check cache or fetch from API
+            const cachedData = localStorage.getItem(cacheKey);
+            if (cachedData) {
+                const { data, timestamp } = JSON.parse(cachedData);
+                if (Date.now() - timestamp < CACHE_DURATION) {
+                    console.log('Using cached stations for:', countryCode);
+                    allStations = data;
+                }
+            }
+            if (!allStations) {
+                console.log('Fetching fresh stations from API...');
+                allStations = await fetchFromFastestServer(`/json/stations/bycountrycodeexact/${countryCode}?hidebroken=true&order=votes&reverse=true`);
+                if (!allStations || !allStations.length) {
+                    console.warn('No stations returned from API for:', countryCode);
+                    allStations = [];
+                }
+                localStorage.setItem(cacheKey, JSON.stringify({ data: allStations, timestamp: Date.now() }));
+                console.log('Stations cached successfully');
             }
         }
-        if (!allStations) {
-            console.log('Fetching fresh stations from API...');
-            allStations = await fetchFromFastestServer(`/json/stations/bycountrycodeexact/${countryCode}?hidebroken=true&order=votes&reverse=true`);
-            if (!allStations || !allStations.length) throw new Error(`No stations found for ${countryCode}`);
-            localStorage.setItem(cacheKey, JSON.stringify({ data: allStations, timestamp: Date.now() }));
-            console.log('Stations cached successfully');
-        }
+
         countryStations = mergeDuplicateStations(allStations);
-        selectedLanguage = ''; // Reset selected language on country change
+        selectedLanguage = '';
+        searchQuery = '';
+        document.getElementById('stationSearch').value = '';
         filterStationsByLanguage(selectedLanguage);
-        populateLanguageDropdown(); // Repopulate language dropdown with new country's languages
+        populateLanguageDropdown();
         console.log('Rendering station list...', { stationCount: stations.length });
         renderStationList();
+        updateSearchVisibility();
     } catch (error) {
         console.error('Failed to fetch/display stations:', error.message);
         stationsFailedToLoad = true;
-        showError('No stations loaded.\nPlease try another country or check your connection.');
-        stations = [];
-        renderStationList();
-        populateLanguageDropdown(); // Ensure language dropdown is updated even on error
+        if (countryCode.toUpperCase() === 'IN') {
+            console.log('Using custom stations for IN due to API failure');
+            countryStations = mergeDuplicateStations(CUSTOM_INDIAN_STATIONS);
+            selectedLanguage = '';
+            searchQuery = '';
+            document.getElementById('stationSearch').value = '';
+            filterStationsByLanguage(selectedLanguage);
+            populateLanguageDropdown();
+            renderStationList();
+            localStorage.setItem(`${CACHE_KEY}_${countryCode}`, JSON.stringify({
+                data: countryStations,
+                timestamp: Date.now()
+            }));
+        } else {
+            showError('No stations loaded.\nPlease try another country or check your connection.');
+            stations = [];
+            renderStationList();
+            populateLanguageDropdown();
+        }
+        updateSearchVisibility();
     } finally {
         showLoading(false);
     }
@@ -554,9 +589,12 @@ function handleCountryChange(e) {
     updateFlagDisplay(countryCode);
     if (countryCode) {
         clearError();
-        selectedLanguage = ''; // Reset language selection
+        selectedLanguage = '';
+        searchQuery = '';
+        document.getElementById('stationSearch').value = '';
+        updateSearchVisibility();
         lastSelectedCountry = countryCode;
-        document.getElementById('languageSelect').value = ''; // Clear language dropdown selection
+        document.getElementById('languageSelect').value = '';
         fetchAndDisplayAllStations(countryCode).catch((err) => {
             console.error('Country change failed:', err.message);
             stationsFailedToLoad = true;
@@ -565,6 +603,9 @@ function handleCountryChange(e) {
     } else {
         clearError();
         selectedLanguage = '';
+        searchQuery = '';
+        document.getElementById('stationSearch').value = '';
+        updateSearchVisibility();
         document.getElementById('languageSelect').innerHTML = '<option value="">Select country first</option>';
         document.getElementById('languageSelect').disabled = true;
         document.getElementById('stationSelect').innerHTML = '<option value="">Select language first</option>';
@@ -631,13 +672,29 @@ function populateLanguageDropdown() {
 function handleLanguageChange(e) {
     selectedLanguage = e.target.value;
     console.log('Language changed to:', selectedLanguage);
+    searchQuery = '';
+    document.getElementById('stationSearch').value = '';
+    updateSearchVisibility();
     filterStationsByLanguage(selectedLanguage);
     renderStationList(true);
 }
 
 function filterStationsByLanguage(language) {
-    stations = language ? countryStations.filter(station => normalizeLanguage(station.language) === language) : [...countryStations];
-    console.log('Filtered stations by language:', { language, count: stations.length });
+    let filteredStations = language ? countryStations.filter(station => normalizeLanguage(station.language) === language) : [...countryStations];
+    if (searchQuery) {
+        filteredStations = filteredStations.filter(station => 
+            station.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }
+    stations = filteredStations;
+    console.log('Filtered stations:', { language, searchQuery, count: stations.length });
+}
+
+function updateSearchVisibility() {
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    const stationSearch = document.getElementById('stationSearch');
+    clearSearchBtn.style.display = stationSearch.value.trim() ? 'flex' : 'none';
+    console.log('Search visibility updated:', { hasValue: !!stationSearch.value.trim() });
 }
 
 function getFavorites() {
@@ -799,6 +856,7 @@ function renderStationList(isLanguageChange = false) {
                     console.log(`Restored current station selection: ${currentStation.name}`, { currentIndex, selectValue, selectedFromFavorites });
                 }
             }
+            updateSearchVisibility();
         }
     };
 
@@ -909,7 +967,7 @@ function showLoading(show) {
     const loading = document.getElementById('loading');
     const progressBar = document.getElementById('progressBar');
     const player = document.querySelector('.player');
-    
+
     if (!loading || !progressBar || !player) {
         console.error('Loading elements not found in DOM', {
             loading: !!loading,
@@ -922,9 +980,9 @@ function showLoading(show) {
     isLoading = show;
     loading.style.display = show ? 'block' : 'none';
     loading.setAttribute('aria-busy', show ? 'true' : 'false');
-    
+
     player.classList.toggle('progress-active', show);
-    
+
     let animationFrame = null;
     if (window.currentLoadingAnimation) {
         cancelAnimationFrame(window.currentLoadingAnimation);
@@ -939,19 +997,19 @@ function showLoading(show) {
     if (show) {
         updateProgress(0);
         let progress = 0;
-        
+
         const animateProgress = () => {
             if (!isLoading) return;
-            
+
             const increment = Math.random() * (90 - progress) * 0.05;
             progress = Math.min(progress + increment, 90);
             updateProgress(progress);
-            
+
             if (progress < 90 && isLoading) {
                 window.currentLoadingAnimation = requestAnimationFrame(animateProgress);
             }
         };
-        
+
         window.currentLoadingAnimation = requestAnimationFrame(animateProgress);
     } else {
         if (progressBar.style.width !== '100%') {
@@ -961,7 +1019,7 @@ function showLoading(show) {
             }, 300);
         }
     }
-    
+
     console.log('Loading state changed:', {
         show: show,
         progress: progressBar.style.width,
@@ -1016,7 +1074,7 @@ function updatePlayerDisplay() {
     playPauseBtn.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
     playPauseBtn.disabled = !currentStation || isOffline;
     playPauseBtn.classList.toggle('active', isPlaying);
-    
+
     stopBtn.disabled = !currentStation || isOffline;
 
     const options = Array.from(stationSelect.options).filter(opt => opt.value !== '');
@@ -1208,6 +1266,24 @@ function nextStation() {
     playStation(stations[stationIndex]);
 }
 
+document.getElementById('stationSearch').addEventListener('input', (e) => {
+    searchQuery = e.target.value.trim();
+    console.log('Search query updated:', searchQuery);
+    updateSearchVisibility();
+    filterStationsByLanguage(selectedLanguage);
+    renderStationList(true);
+});
+
+document.getElementById('clearSearchBtn').addEventListener('click', () => {
+    const stationSearch = document.getElementById('stationSearch');
+    stationSearch.value = '';
+    searchQuery = '';
+    console.log('Search cleared');
+    updateSearchVisibility();
+    filterStationsByLanguage(selectedLanguage);
+    renderStationList(true);
+});
+
 document.getElementById('stationSelect').addEventListener('change', (e) => {
     const value = e.target.value;
     if (value) {
@@ -1311,172 +1387,24 @@ window.addEventListener('online', async () => {
     if (currentStation && !isManuallyPaused) {
         console.log('Attempting to resume playback after reconnect...');
         await playStation(currentStation).catch((err) => {
-            console.error('Resume failed after reconnect:', err.message);
-            showError('You’re back online, but the station isn’t playing.\nTry again or pick a new one!');
+            console.error('Failed to resume playback after reconnect:', err.message);
+            showError('Couldn’t reconnect to the station.\nPlease try again!');
         });
-    } else {
-        showError('You’re back online!\nPlease choose a station to start the music.');
     }
-    updatePlayerDisplay();
 });
 
 window.addEventListener('offline', () => {
     isOffline = true;
     console.warn('Network lost');
-    if (!isManuallyPaused) {
+    showError('You are offline!\nPlease check your internet connection.');
+    if (isPlaying) {
+        audio.pause();
         isPlaying = false;
-        if (audio.played.length > 0) audio.pause();
-        stopHeartbeat();
-        stopSilenceDetection();
-        releaseWakeLock();
-        keepAliveAudio.pause();
-        showError('You are offline!\nPlease check your internet connection.');
         updatePlayerDisplay();
     }
 });
 
-setInterval(() => {
-    const newOnlineStatus = navigator.onLine;
-    if (newOnlineStatus && isOffline) {
-        console.log('Online status changed to online');
-        window.dispatchEvent(new Event('online'));
-    } else if (!newOnlineStatus && !isOffline) {
-        console.log('Online status changed to offline');
-        window.dispatchEvent(new Event('offline'));
-    }
-    isOffline = !newOnlineStatus;
-}, 1000);
-
 document.addEventListener('DOMContentLoaded', () => {
-    isOffline = !navigator.onLine;
-    console.log('DOM loaded, initial offline status:', isOffline);
-    if (isOffline) {
-        showError('You are offline!\nPlease check your internet connection.');
-        window.addEventListener('online', () => initializeApp(), { once: true });
-    } else {
-        initializeApp();
-    }
-});
-
-window.onerror = (msg, url, line, col, error) => {
-    console.error(`Uncaught error: ${msg}`, { url, line, col, details: error });
-    showError(isOffline ? 'You are offline!\nPlease check your internet connection.' : 'The app hit a snag.\nPlease refresh the page.');
-};
-
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js')
-        .then(reg => console.log('Service Worker registered:', reg.scope))
-        .catch(err => console.error('Service Worker registration failed:', err.message));
-    navigator.serviceWorker.addEventListener('message', (event) => {
-        const { action } = event.data;
-        console.log('Service Worker message received:', action);
-        switch (action) {
-            case 'play':
-                if (currentStation && !isPlaying && !isOffline) playStation(currentStation);
-                break;
-            case 'pause':
-                if (isPlaying) {
-                    audio.pause();
-                    isPlaying = false;
-                    isManuallyPaused = true;
-                    stopHeartbeat();
-                    stopSilenceDetection();
-                    releaseWakeLock();
-                    keepAliveAudio.pause();
-                    updatePlayerDisplay();
-                }
-                break;
-            case 'stop':
-                stopPlayback();
-                break;
-            case 'previous':
-                previousStation();
-                break;
-            case 'next':
-                nextStation();
-                break;
-        }
-    });
-}
-
-function searchStations(query) {
-    const searchInput = document.getElementById('stationSearch');
-    const stationSelect = document.getElementById('stationSelect');
-    const clearBtn = document.getElementById('clearSearchBtn');
-    
-    if (!query) {
-        filterStationsByLanguage(selectedLanguage);
-        renderStationList();
-        clearBtn.style.display = 'none';
-        return;
-    }
-
-    const lowercaseQuery = query.toLowerCase();
-    stations = countryStations.filter(station => {
-        const matchesLanguage = !selectedLanguage || normalizeLanguage(station.language) === selectedLanguage;
-        return matchesLanguage && station.name.toLowerCase().includes(lowercaseQuery);
-    });
-    
-    renderStationList();
-    clearBtn.style.display = 'inline-flex';
-    console.log('Station search performed', { 
-        query: lowercaseQuery, 
-        language: selectedLanguage,
-        results: stations.length 
-    });
-}
-
-function clearSearch() {
-    const searchInput = document.getElementById('stationSearch');
-    const clearBtn = document.getElementById('clearSearchBtn');
-    
-    const isKeyboardVisible = document.activeElement === searchInput;
-    
-    searchInput.value = '';
-    filterStationsByLanguage(selectedLanguage);
-    renderStationList();
-    clearBtn.style.display = 'none';
-    
-    if (isKeyboardVisible) {
-        searchInput.focus();
-    }
-    
-    console.log('Search cleared', { 
-        keyboardWasVisible: isKeyboardVisible, 
-        selectedLanguage 
-    });
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    const searchInput = document.getElementById('stationSearch');
-    const clearBtn = document.getElementById('clearSearchBtn');
-    
-    let searchTimeout;
-    searchInput.addEventListener('input', (e) => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            searchStations(e.target.value.trim());
-        }, 300);
-    });
-
-    clearBtn.addEventListener('click', clearSearch);
-
-    searchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            clearTimeout(searchTimeout);
-            searchStations(e.target.value.trim());
-        }
-    });
-
-    searchInput.addEventListener('focus', () => {
-        if (searchInput.value) {
-            clearBtn.style.display = 'inline-flex';
-        }
-    });
-
-    searchInput.addEventListener('blur', () => {
-        if (!searchInput.value) {
-            clearBtn.style.display = 'none';
-        }
-    });
+    console.log('DOM loaded, initializing app...');
+    initializeApp();
 });
