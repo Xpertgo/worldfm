@@ -498,9 +498,9 @@ async function fetchAndDisplayAllStations(countryCode) {
         let allStations = null;
 
         if (countryCode.toUpperCase() === 'IN') {
-            // For India, use only CUSTOM_INDIAN_STATIONS
-            console.log('Using custom stations for India');
-            allStations = CUSTOM_INDIAN_STATIONS;
+            // For India, use CUSTOM_INDIAN_STATIONS and sort by votes
+            console.log('Using custom stations for India, sorting by votes');
+            allStations = [...CUSTOM_INDIAN_STATIONS].sort((a, b) => (b.votes || 0) - (a.votes || 0));
             localStorage.setItem(cacheKey, JSON.stringify({ data: allStations, timestamp: Date.now() }));
         } else {
             // For other countries, check cache or fetch from API
@@ -538,7 +538,7 @@ async function fetchAndDisplayAllStations(countryCode) {
         stationsFailedToLoad = true;
         if (countryCode.toUpperCase() === 'IN') {
             console.log('Using custom stations for IN due to API failure');
-            countryStations = mergeDuplicateStations(CUSTOM_INDIAN_STATIONS);
+            countryStations = mergeDuplicateStations([...CUSTOM_INDIAN_STATIONS].sort((a, b) => (b.votes || 0) - (a.votes || 0)));
             selectedLanguage = '';
             searchQuery = '';
             document.getElementById('stationSearch').value = '';
@@ -1247,7 +1247,7 @@ function nextStation() {
 
     const nextOption = options[nextIndex];
     const isFavoriteSelection = nextOption.value.startsWith('fav-');
-    const stationIndex = parseInt(nextOption.value.replace('main-', '').replace('fav-', ''), 10);
+    const stationIndex = parseInt(nextOption.value.replace('main-', ''). photo('fav-', ''), 10);
 
     if (isNaN(stationIndex) || stationIndex < 0 || stationIndex >= stations.length) {
         console.error('Invalid station index for next option:', { nextOption });
