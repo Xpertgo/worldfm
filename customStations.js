@@ -1835,7 +1835,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "url_resolved": "https://stream-153.zeno.fm/xush70b1cbruv?zt=eyJhbGciOiJIUzI1NiJ9.eyJzdHJlYW0iOiJ4dXNoNzBiMWNicnV2IiwiaG9zdCI6InN0cmVhbS0xNTMuemVuby5mbSIsInJ0dGwiOjUsImp0aSI6IktzMUIweU9iUm9PdEFWVjVlX1F3ZGciLCJpYXQiOjE3MzgxNDk4MDcsImV4cCI6MTczODE0OTg2N30.3enB3waPQxNQtJtheCrZxm79XrRUySMma-c87DHes2E",
         "favicon": "https://pbs.twimg.com/profile_images/1358111873523085312/JyzT_Rad_400x400.jpg",
         "countrycode": "IN",
-        "language": "bangla,bengali",
+        "language": "bengali",
         "bitrate": 0,
         "votes": 7
     },
@@ -3849,16 +3849,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "bitrate": 64,
         "votes": 75
     },
-    {
-        "name": "Dipak",
-        "url": "http://stream.zeno.fm/2k6xfu1pvs8uv",
-        "url_resolved": "http://stream.zeno.fm/2k6xfu1pvs8uv",
-        "favicon": "https://myradiodj4.blogspot.com/favicon.ico",
-        "countrycode": "IN",
-        "language": "bangla,bengali",
-        "bitrate": 0,
-        "votes": 656
-    },
+ 
     {
         "name": "Diverse FM",
         "url": "https://carol.epichosts.co.uk:8570/;",
@@ -7155,7 +7146,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "url_resolved": "https://server.mixify.in/listen/bangla/radio.mp3",
         "favicon": "",
         "countrycode": "IN",
-        "language": "",
+        "language": "bengali",
         "bitrate": 192,
         "votes": 39
     },
@@ -7425,7 +7416,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "url_resolved": "http://stream-160.zeno.fm/u7eee0hyzp8uv?zt=eyJhbGciOiJIUzI1NiJ9.eyJzdHJlYW0iOiJ1N2VlZTBoeXpwOHV2IiwiaG9zdCI6InN0cmVhbS0xNjAuemVuby5mbSIsInRtIjpmYWxzZSwicnR0bCI6NSwianRpIjoiZmFNVGY2OXdSeTZNMm1yWWdkU3VnQSIsImlhdCI6MTc0NTc1NDMyMywiZXhwIjoxNzQ1NzU0MzgzfQ.cv_tD2B2oZ3AQzgeEkv0DgKAVzJnZUwsarEAk6OTUgo",
         "favicon": "http://zeno.fm/favicon.ico",
         "countrycode": "IN",
-        "language": "bengali,hindi",
+        "language": "bengali",
         "bitrate": 0,
         "votes": 9619
     },
