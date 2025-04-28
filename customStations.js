@@ -440,16 +440,6 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 96
     },
     {
-        "name": "AIR Akashvani Maitree Kolkata",
-        "url": "https://airhlspush.pc.cdn.bitgravity.com/httppush/hlspbaudio245/hlspbaudio24564kbps.m3u8",
-        "url_resolved": "https://airhlspush.pc.cdn.bitgravity.com/httppush/hlspbaudio245/hlspbaudio24564kbps.m3u8",
-        "favicon": "https://prasarbharati.gov.in/wp-content/uploads/2020/04/cropped-pblogo-180x180.png",
-        "countrycode": "IN",
-        "language": "bengali",
-        "bitrate": 0,
-        "votes": 1774
-    },
-    {
         "name": "AIR Alappuzha",
         "url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio230/playlist.m3u8",
         "url_resolved": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio230/playlist.m3u8",
@@ -1530,7 +1520,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 61
     },
     {
-        "name": "Akashvani Maitree",
+        "name": "AIR Akashvani Maitree Kolkata",
         "url": "https://airhlspush.pc.cdn.bitgravity.com/httppush/hlspbaudio245/hlspbaudio24564kbps.m3u8",
         "url_resolved": "https://airhlspush.pc.cdn.bitgravity.com/httppush/hlspbaudio245/hlspbaudio24564kbps.m3u8",
         "favicon": "https://onlineradiohub.com/wp-content/uploads/2024/02/akashvani-maitree.jpg",
@@ -2218,16 +2208,6 @@ export const CUSTOM_INDIAN_STATIONS = [
         "language": "tamil",
         "bitrate": 128,
         "votes": 119
-    },
-    {
-        "name": "Balurghat FM",
-        "url": "http://playerservices.streamtheworld.com/api/livestream-redirect/SP_R3563475_SC",
-        "url_resolved": "http://18213.live.streamtheworld.com:80/SP_R3563475_SC",
-        "favicon": "https://onlineradiohub.com/wp-content/uploads/2024/02/balurghat-fm.jpg",
-        "countrycode": "IN",
-        "language": "bangla",
-        "bitrate": 128,
-        "votes": 56
     },
     {
         "name": "Bamboda Radio India",
