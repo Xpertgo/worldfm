@@ -7144,7 +7144,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "name": "Mixify Bengali Hits",
         "url": "https://server.mixify.in/listen/bangla/radio.mp3",
         "url_resolved": "https://server.mixify.in/listen/bangla/radio.mp3",
-        "favicon": "",
+        "favicon": "https://mixify.in/assets/mixify_630_white_bangla.png",
         "countrycode": "IN",
         "language": "bengali",
         "bitrate": 192,
