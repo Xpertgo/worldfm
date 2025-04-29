@@ -19,6 +19,26 @@ export const CUSTOM_INDIAN_STATIONS = [
         "bitrate": 48,
         "votes": 4286
     },
+     {
+        "name": "RED FM 93.5",
+        "url": "https://stream-174.zeno.fm/q97eczydqrhvv?zt=eyJhbGciOiJIUzI1NiJ9.eyJzdHJlYW0iOiJxOTdlY3p5ZHFyaHZ2IiwiaG9zdCI6InN0cmVhbS0xNzQuemVuby5mbSIsInRtIjpmYWxzZSwicnR0bCI6NSwianRpIjoiTU5RSThfOUpTQjJaLVJJTUJUdUpPdyIsImlhdCI6MTc0NTkxMjk4OCwiZXhwIjoxNzQ1OTEzMDQ4fQ.vrB95ZR8KynPDpcU-a3PHxcAtcRpQPtCvIo3F5S_lCA",
+        "url_resolved": "https://stream-174.zeno.fm/q97eczydqrhvv?zt=eyJhbGciOiJIUzI1NiJ9.eyJzdHJlYW0iOiJxOTdlY3p5ZHFyaHZ2IiwiaG9zdCI6InN0cmVhbS0xNzQuemVuby5mbSIsInRtIjpmYWxzZSwicnR0bCI6NSwianRpIjoiTU5RSThfOUpTQjJaLVJJTUJUdUpPdyIsImlhdCI6MTc0NTkxMjk4OCwiZXhwIjoxNzQ1OTEzMDQ4fQ.vrB95ZR8KynPDpcU-a3PHxcAtcRpQPtCvIo3F5S_lCA",
+        "favicon": "https://radiobarfi.com/wp-content/uploads/2024/04/Red-FM-93.5-Live-Online.png.webp",
+        "countrycode": "IN",
+        "language": "hindi",
+        "bitrate": 48,
+        "votes": 10005
+    },
+     {
+        "name": "Vividh Bharati",
+        "url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio001/playlist.m3u8",
+        "url_resolved": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio001/playlist.m3u8",
+        "favicon": "https://onlineradiohub.com/wp-content/uploads/2023/02/vividh-bharati.jpg",
+        "countrycode": "IN",
+        "language": "hindi",
+        "bitrate": 48,
+        "votes": 8524
+    },
     {
         "name": "2B! Radio Sangam Guruvar",
         "url": "http://iskon2b.out.airtime.pro:8000/iskon2b_a",
@@ -2040,16 +2060,6 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 54
     },
     {
-        "name": "asianfeverfm",
-        "url": "https://radio.canstream.co.uk:8115/live.mp3",
-        "url_resolved": "https://radio.canstream.co.uk:8115/live.mp3",
-        "favicon": "https://radiosindia.com/images/asianfeverfm.jpg",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 128,
-        "votes": 92
-    },
-    {
         "name": "asr-digital-radio",
         "url": "https://stream-153.zeno.fm/aqf1rvdnc18uv?zs=4S2ro1YeRSSZVUZKPe8VQQ",
         "url_resolved": "https://stream-175.zeno.fm/aqf1rvdnc18uv?zt=eyJhbGciOiJIUzI1NiJ9.eyJzdHJlYW0iOiJhcWYxcnZkbmMxOHV2IiwiaG9zdCI6InN0cmVhbS0xNzUuemVuby5mbSIsInRtIjpmYWxzZSwicnR0bCI6NSwianRpIjoiS3Z2dGRMczhUN203VmpNQy0xV3pzdyIsImlhdCI6MTc0NTc1NTU0OSwiZXhwIjoxNzQ1NzU1NjA5fQ.QK4Hej343Nsn7K4V00m8sSmi2yrhzJhoyBKenzmR08A",
@@ -2240,10 +2250,10 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 83
     },
     {
-        "name": "Best fm. ",
+        "name": "Best FM",
         "url": "https://radio.mbconline.xyz/hls/bestfm.m3u8",
         "url_resolved": "https://radio.mbconline.xyz/hls/bestfm.m3u8",
-        "favicon": "",
+        "favicon": "https://radiosindia.com/images/bestfm.jpg",
         "countrycode": "IN",
         "language": "hindi",
         "bitrate": 0,
@@ -2258,16 +2268,6 @@ export const CUSTOM_INDIAN_STATIONS = [
         "language": "",
         "bitrate": 0,
         "votes": 164
-    },
-    {
-        "name": "bestfm",
-        "url": "https://radio.mbconline.xyz/hls/bestfm.m3u8",
-        "url_resolved": "https://radio.mbconline.xyz/hls/bestfm.m3u8",
-        "favicon": "https://radiosindia.com/images/bestfm.jpg",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 0,
-        "votes": 71
     },
     {
         "name": "Bhagavad Gita Radio",
@@ -3389,26 +3389,6 @@ export const CUSTOM_INDIAN_STATIONS = [
         "language": "hindi",
         "bitrate": 0,
         "votes": 2390
-    },
-    {
-        "name": "City fm 92",
-        "url": "https://stream-157.zeno.fm/bauwkrnqhxhvv?zt=eyJhbGciOiJIUzI1NiJ9.eyJzdHJlYW0iOiJiYXV3a3JucWh4aHZ2IiwiaG9zdCI6InN0cmVhbS0xNTcuemVuby5mbSIsInJ0dGwiOjUsImp0aSI6InpEeXVweHpXU1JLZXkzQzRDcVR1WkEiLCJpYXQiOjE",
-        "url_resolved": "https://stream-155.zeno.fm/bauwkrnqhxhvv?zt=eyJhbGciOiJIUzI1NiJ9.eyJzdHJlYW0iOiJiYXV3a3JucWh4aHZ2IiwiaG9zdCI6InN0cmVhbS0xNTUuemVuby5mbSIsInRtIjpmYWxzZSwicnR0bCI6NSwianRpIjoiekgySnZlbXZRR2lZTWdkLUU4VjkwUSIsImlhdCI6MTc0NTczNjM3NywiZXhwIjoxNzQ1NzM2NDM3fQ.oFwXF9Dkw6t7najr1QBtnbA5zTlurwZdUJ3y8hdgKVs",
-        "favicon": "https://stream-157.zeno.fm/favicon.ico",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 0,
-        "votes": 57
-    },
-    {
-        "name": "city92fm",
-        "url": "https://stream.zeno.fm/bauwkrnqhxhvv",
-        "url_resolved": "https://stream.zeno.fm/bauwkrnqhxhvv",
-        "favicon": "https://radiosindia.com/images/city92fm.jpg",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 0,
-        "votes": 122
     },
     {
         "name": "cityfmtamil",
@@ -9473,7 +9453,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 32
     },
     {
-        "name": "Radio Suno 1024 FM",
+        "name": "Radio Mirchi Hindi",
         "url": "https://eu8.fastcast4u.com/proxy/clyedupq/stream",
         "url_resolved": "https://eu8.fastcast4u.com/proxy/clyedupq/stream",
         "favicon": "https://onlineradiohub.com/wp-content/uploads/2023/05/suno-fm-1024-hindi.jpg",
@@ -9482,6 +9462,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "bitrate": 128,
         "votes": 106
     },
+    
     {
         "name": "Radio Suno 91.7 FM",
         "url": "http://playerservices.streamtheworld.com/api/livestream-redirect/SUNO917_SC",
