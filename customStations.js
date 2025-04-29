@@ -2790,16 +2790,6 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 15012
     },
     {
-        "name": "Bollywood now",
-        "url": "https://drive.uber.radio/uber/bollywoodnow/icecast.audio",
-        "url_resolved": "https://nl4.mystreaming.net:443/uber/bollywoodnow/icecast.audio",
-        "favicon": "null",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 0,
-        "votes": 50
-    },
-    {
         "name": "Bollywood 2000's ",
         "url": "https://2.mystreaming.net/uber/bollywood2000s/icecast.audio",
         "url_resolved": "https://2.mystreaming.net/uber/bollywood2000s/icecast.audio",
@@ -2905,7 +2895,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "url_resolved": "https://stream-142.zeno.fm/6n6ewddtad0uv?zt=eyJhbGciOiJIUzI1NiJ9.eyJzdHJlYW0iOiI2bjZld2RkdGFkMHV2IiwiaG9zdCI6InN0cmVhbS0xNDIuemVuby5mbSIsInRtIjpmYWxzZSwicnR0bCI6NSwianRpIjoiRnZrV3FFeHVRXzJPbEs0QWNNbUdBZyIsImlhdCI6MTc0NTczNDQ5OSwiZXhwIjoxNzQ1NzM0NTU5fQ.RdJqpE4cDQeisCqjui3XkNjtLukV7gtJBwHTBMT5yx8",
         "favicon": "https://mytuner.global.ssl.fastly.net/media/tvos_radios/ppqbgfej6skx.jpeg",
         "countrycode": "IN",
-        "language": "",
+        "language": "Hindi",
         "bitrate": 0,
         "votes": 26099
     },
@@ -2939,16 +2929,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "bitrate": 0,
         "votes": 46
     },
-    {
-        "name": "Bollywood Now",
-        "url": "https://drive.uber.radio/uber/bollywoodnow/icecast.audio",
-        "url_resolved": "https://drive.uber.radio/uber/bollywoodnow/icecast.audio",
-        "favicon": "null",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 0,
-        "votes": 36
-    },
+    
     {
         "name": "Bollywood Punjabi Radio",
         "url": "http://stream.zeno.fm/1k0y9f0cm0quv",
@@ -3480,7 +3461,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 508
     },
     {
-        "name": "clubmirchi",
+        "name": "Club Mirchi",
         "url": "https://mirchiplaylive.akamaized.net/hls/live/2036929-b/MUM/CLUBMI_Auto.m3u8",
         "url_resolved": "https://mirchiplaylive.akamaized.net/hls/live/2036929-b/MUM/CLUBMI_Auto.m3u8",
         "favicon": "https://radiosindia.com/images/clubmirchi.jpg",
@@ -3488,16 +3469,6 @@ export const CUSTOM_INDIAN_STATIONS = [
         "language": "hindi",
         "bitrate": 64,
         "votes": 48
-    },
-    {
-        "name": "clubmirchi",
-        "url": "https://mirchiplaylive.akamaized.net/hls/live/2036929-b/MUM/CLUBMI_Auto.m3u8",
-        "url_resolved": "https://mirchiplaylive.akamaized.net/hls/live/2036929-b/MUM/CLUBMI_Auto.m3u8",
-        "favicon": "https://radiosindia.com/images/clubmirchi.jpg",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 64,
-        "votes": 27
     },
     {
         "name": "CMR FM Tamil HD",
@@ -3798,26 +3769,6 @@ export const CUSTOM_INDIAN_STATIONS = [
         "language": "hindi",
         "bitrate": 96,
         "votes": 60
-    },
-    {
-        "name": "DILSE Radio",
-        "url": "https://radio.huntoola.com/listen/dilse/radio.mp3",
-        "url_resolved": "https://radio.huntoola.com/listen/dilse/radio.mp3",
-        "favicon": "https://i.ibb.co/20JFrV3C/DILSE.png",
-        "countrycode": "IN",
-        "language": "",
-        "bitrate": 320,
-        "votes": 22
-    },
-    {
-        "name": "DILSE Radio",
-        "url": "https://radio.huntoola.com/listen/dilse/radio.mp3",
-        "url_resolved": "",
-        "favicon": "https://i.ibb.co/20JFrV3C/DILSE.png",
-        "countrycode": "IN",
-        "language": "english,english hindi,hindi",
-        "bitrate": 320,
-        "votes": 22
     },
     {
         "name": "DILSE Radio",
@@ -5721,24 +5672,14 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 62
     },
     {
-        "name": "Ishq Fm",
-        "url": "https://drive.uber.radio/uber/bollywoodlove/icecast.audio",
-        "url_resolved": "https://nl4.mystreaming.net:443/uber/bollywoodlove/icecast.audio",
-        "favicon": "https://akm-img-a-in.tosshub.com/sites/ishq/favicon.ico",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 0,
-        "votes": 1714
-    },
-    {
         "name": "ISHQ FM 104.8",
         "url": "https://drive.uber.radio/uber/bollywoodlove/icecast.audio",
-        "url_resolved": "https://drive.uber.radio/uber/bollywoodlove/icecast.audio",
+        "url_resolved": "https://nl4.mystreaming.net:443/uber/bollywoodlove/icecast.audio",
         "favicon": "https://onlineradiohub.com/wp-content/uploads/2023/05/ishq-fm-hindi.jpg",
         "countrycode": "IN",
         "language": "hindi",
         "bitrate": 0,
-        "votes": 799
+        "votes": 1714
     },
     {
         "name": "itamilmedia",
@@ -6970,16 +6911,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "bitrate": 0,
         "votes": 140
     },
-    {
-        "name": "meethimirchi",
-        "url": "https://drive.uber.radio/uber/bollywoodnow/icecast.audio",
-        "url_resolved": "https://2.mystreaming.net:443/uber/bollywoodnow/icecast.audio",
-        "favicon": "https://radiosindia.com/images/meethimirchi.jpg",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 0,
-        "votes": 161
-    },
+   
     {
         "name": "mega-zone-south",
         "url": "https://vm65162.streamerr.co/listen/megazone_south/radio.mp3",
@@ -7041,26 +6973,6 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 55
     },
     {
-        "name": "Mirchi Love",
-        "url": "https://drive.uber.radio/uber/bollywoodlove/icecast.audio",
-        "url_resolved": "https://drive.uber.radio/uber/bollywoodlove/icecast.audio",
-        "favicon": "http://mirchi.in/favicon-196x196.png",
-        "countrycode": "IN",
-        "language": "",
-        "bitrate": 0,
-        "votes": 6007
-    },
-    {
-        "name": "Mirchi Love",
-        "url": "https://drive.uber.radio/uber/lrbollywood/icecast.audio",
-        "url_resolved": "https://drive.uber.radio/uber/lrbollywood/icecast.audio",
-        "favicon": "https://liveradios.in/wp-content/uploads/mirchilove-1.jpg",
-        "countrycode": "IN",
-        "language": "",
-        "bitrate": 0,
-        "votes": 981
-    },
-    {
         "name": "Mirchi Love Hindi",
         "url": "https://drive.uber.radio/uber/lrbollywood/icecast.audio",
         "url_resolved": "https://2.mystreaming.net:443/uber/lrbollywood/icecast.audio",
@@ -7083,7 +6995,7 @@ export const CUSTOM_INDIAN_STATIONS = [
     {
         "name": "Mirchi Top 20",
         "url": "https://drive.uber.radio/uber/bollywoodnow/icecast.audio",
-        "url_resolved": "https://nl4.mystreaming.net:443/uber/bollywoodnow/icecast.audio",
+        "url_resolved": "https://2.mystreaming.net:443/uber/bollywoodnow/icecast.audio",
         "favicon": "http://mirchi.in/favicon-196x196.png",
         "countrycode": "IN",
         "language": "hindi",
@@ -7091,40 +7003,10 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 8173
     },
     {
-        "name": "Mirchi Top 20",
-        "url": "https://drive.uber.radio/uber/bollywoodnow/icecast.audio",
-        "url_resolved": "https://nl4.mystreaming.net:443/uber/bollywoodnow/icecast.audio",
-        "favicon": "https://onlineradiohub.com/wp-content/uploads/2023/05/mirchi-top20-fm.jpg",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 0,
-        "votes": 299
-    },
-    {
-        "name": "mirchitop20",
-        "url": "https://drive.uber.radio/uber/bollywoodnow/icecast.audio",
-        "url_resolved": "https://drive.uber.radio/uber/bollywoodnow/icecast.audio",
-        "favicon": "https://radiosindia.com/images/mirchitop20.jpg",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 0,
-        "votes": 72
-    },
-    {
-        "name": "mixify",
-        "url": "https://server.mixify.in/listen/listen/radio.mp3",
-        "url_resolved": "https://server.mixify.in/listen/listen/radio.mp3",
-        "favicon": "https://radiosindia.com/images/mixify.jpg",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 192,
-        "votes": 196
-    },
-    {
-        "name": "mixify",
+        "name": "Mixify Evergreen Hits",
         "url": "https://server.mixify.in/listen/evergreen/radio.mp3",
         "url_resolved": "https://server.mixify.in/listen/evergreen/radio.mp3",
-        "favicon": "null",
+        "favicon": "https://mixify.in/assets/mixify_630_white_evergreen.png",
         "countrycode": "IN",
         "language": "hindi",
         "bitrate": 192,
@@ -7134,11 +7016,11 @@ export const CUSTOM_INDIAN_STATIONS = [
         "name": "Mixify 90's Hits",
         "url": "https://server.mixify.in/listen/listen/radio.mp3",
         "url_resolved": "https://server.mixify.in/listen/listen/radio.mp3",
-        "favicon": "",
+        "favicon": "https://mixify.in/assets/mixify_630_white_90s.png",
         "countrycode": "IN",
-        "language": "",
+        "language": "Hindi",
         "bitrate": 192,
-        "votes": 95
+        "votes": 1080
     },
     {
         "name": "Mixify Bengali Hits",
@@ -7151,70 +7033,20 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 39
     },
     {
-        "name": "Mixify Bollywood",
-        "url": "https://server.mixify.in/listen/listen/radio.mp3",
-        "url_resolved": "https://server.mixify.in/listen/listen/radio.mp3",
-        "favicon": "https://onlineradiohub.com/wp-content/uploads/2023/11/mixify-radio.jpg",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 192,
-        "votes": 1080
-    },
-    {
         "name": "Mixify English Hits",
         "url": "https://server.mixify.in/listen/english/radio.mp3",
         "url_resolved": "https://server.mixify.in/listen/english/radio.mp3",
-        "favicon": "",
+        "favicon": "https://mixify.in/assets/mixify_630_white_english.png",
         "countrycode": "IN",
-        "language": "",
+        "language": "English",
         "bitrate": 192,
         "votes": 30
-    },
-    {
-        "name": "Mixify Evergreen Hits",
-        "url": "https://server.mixify.in/listen/evergreen/radio.mp3",
-        "url_resolved": "https://server.mixify.in/listen/evergreen/radio.mp3",
-        "favicon": "",
-        "countrycode": "IN",
-        "language": "",
-        "bitrate": 192,
-        "votes": 48
-    },
-    {
-        "name": "MixiFy Evergreen Hits",
-        "url": "https://server.mixify.in:8010/",
-        "url_resolved": "https://server.mixify.in:8010/",
-        "favicon": "https://onlineradiohub.com/wp-content/uploads/2023/12/mixiFy-evergreen-hits.jpg",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 192,
-        "votes": 291
-    },
-    {
-        "name": "Mixify Hindi",
-        "url": "https://server.mixify.in/listen/new_hits/radio.mp3",
-        "url_resolved": "https://server.mixify.in/listen/new_hits/radio.mp3",
-        "favicon": "https://mixify.in/wp-content/uploads/2023/01/fav_new_black-150x150.png",
-        "countrycode": "IN",
-        "language": "",
-        "bitrate": 192,
-        "votes": 222
-    },
-    {
-        "name": "Mixify Hindi Hits",
-        "url": "https://server.mixify.in/listen/new_hits/radio.mp3",
-        "url_resolved": "https://server.mixify.in/listen/new_hits/radio.mp3",
-        "favicon": "",
-        "countrycode": "IN",
-        "language": "",
-        "bitrate": 192,
-        "votes": 106
     },
     {
         "name": "MixiFy Hindi Hits",
         "url": "https://server.mixify.in/listen/new_hits/radio.mp3",
         "url_resolved": "https://server.mixify.in/listen/new_hits/radio.mp3",
-        "favicon": "",
+        "favicon": "https://mixify.in/assets/mixify_630_white_hindi.png",
         "countrycode": "IN",
         "language": "hindi",
         "bitrate": 192,
@@ -8421,26 +8253,6 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 1960
     },
     {
-        "name": "Radio Bollywood Gaane Purane",
-        "url": "https://stream.zeno.fm/hem5rrfn07zuv",
-        "url_resolved": "https://stream-142.zeno.fm/hem5rrfn07zuv?zt=eyJhbGciOiJIUzI1NiJ9.eyJzdHJlYW0iOiJoZW01cnJmbjA3enV2IiwiaG9zdCI6InN0cmVhbS0xNDIuemVuby5mbSIsInRtIjpmYWxzZSwicnR0bCI6NSwianRpIjoiSmQ1WnNtOHJRZG1LNk9OYzlteGlCQSIsImlhdCI6MTc0NTc0OTQ4MiwiZXhwIjoxNzQ1NzQ5NTQyfQ.olaxli-g6N2cX11vwqs96W8AQWjLTEYsHERhmPyMfFk",
-        "favicon": "null",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 0,
-        "votes": 105
-    },
-    {
-        "name": "Radio Bollywood Gaane Purane",
-        "url": "https://stream-145.zeno.fm/6n6ewddtad0uv?zs=Hc47dloSRx-vBgJnNOT8DA",
-        "url_resolved": "https://stream-145.zeno.fm/6n6ewddtad0uv?zs=Hc47dloSRx-vBgJnNOT8DA",
-        "favicon": "https://mytuner.global.ssl.fastly.net/media/tvos_radios/ppqbgfej6skx.jpeg",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 0,
-        "votes": 1136
-    },
-    {
         "name": "Radio Bula Masti",
         "url": "https://c7.radioboss.fm:18052/stream",
         "url_resolved": "https://c7.radioboss.fm:18052/stream",
@@ -9059,16 +8871,6 @@ export const CUSTOM_INDIAN_STATIONS = [
         "language": "hindi",
         "bitrate": 128,
         "votes": 5677
-    },
-    {
-        "name": "Radio Mirchi masti ",
-        "url": "http://162.244.80.118:9460/stream.mp3",
-        "url_resolved": "http://162.244.80.118:9460/stream.mp3",
-        "favicon": "null",
-        "countrycode": "IN",
-        "language": "hindi",
-        "bitrate": 64,
-        "votes": 109
     },
     {
         "name": "Radio Mirchi Masti",
