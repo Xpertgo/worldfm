@@ -65,7 +65,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "url_resolved": "http://djbeat.out.airtime.pro:8000/djbeat_a",
         "favicon": "",
         "countrycode": "IN",
-        "language": "",
+        "language": "Hindi",
         "bitrate": 48,
         "votes": 3461
     },
@@ -445,7 +445,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "url_resolved": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio059/chunklist.m3u8",
         "favicon": "",
         "countrycode": "IN",
-        "language": "",
+        "language": "hindi",
         "bitrate": 0,
         "votes": 119
     },
