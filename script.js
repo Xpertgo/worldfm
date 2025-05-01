@@ -1247,7 +1247,7 @@ function nextStation() {
 
     const nextOption = options[nextIndex];
     const isFavoriteSelection = nextOption.value.startsWith('fav-');
-    const stationIndex = parseInt(nextOption.value.replace('main-', ''). photo('fav-', ''), 10);
+    const stationIndex = parseInt(nextOption.value.replace('main-', ''). replace('fav-', ''), 10);
 
     if (isNaN(stationIndex) || stationIndex < 0 || stationIndex >= stations.length) {
         console.error('Invalid station index for next option:', { nextOption });
