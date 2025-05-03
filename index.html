@@ -19,40 +19,59 @@
 </head>
 <body>
     <div class="container">
-        <h1>World FM Radio</h1>
-        
-        <div class="controls">
-            <div class="control-group">
-                <label for="countrySelect">Country:</label>
-                <select id="countrySelect" aria-label="Select Country">
-                    <option value="">Select Country</option>
-                </select>
-            </div>
-            <div class="control-group">
-                <label for="languageSelect">Language:</label>
-                <select id="languageSelect" disabled aria-label="Select Language">
-                    <option value="">Select country first</option>
-                </select>
-            </div>
-            <div class="control-group search-wrapper">
-                <label for="stationSearch">Search Stations:</label>
-                <input type="text" id="stationSearch" placeholder="Search stations..." aria-label="Search Stations">
-                <button class="clear-search" id="clearSearchBtn" aria-label="Clear search" style="display: none;">
-                    <i class="fas fa-times"></i>
+        <header>
+            <h1>World FM Radio</h1>
+            <nav>
+                <button class="toggle-btn" aria-label="Open menu">
+                    <i class="fas fa-bars"></i>
                 </button>
+                <ul class="menu">
+                    <li><a href="#" data-view="home">HOME</a></li>
+                    <li><a href="#" data-view="favorites">FAVOURITE</a></li>
+                    <li><a href="#">ABOUT</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <div class="main-content" id="mainContent">
+            <div class="controls">
+                <div class="control-group">
+                    <label for="countrySelect">Country:</label>
+                    <select id="countrySelect" aria-label="Select Country">
+                        <option value="">Select Country</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="languageSelect">Language:</label>
+                    <select id="languageSelect" disabled aria-label="Select Language">
+                        <option value="">Select country first</option>
+                    </select>
+                </div>
+                <div class="control-group search-wrapper">
+                    <label for="stationSearch">Search Stations:</label>
+                    <input type="text" id="stationSearch" placeholder="Search stations..." aria-label="Search Stations">
+                    <button class="clear-search" id="clearSearchBtn" aria-label="Clear search" style="display: none;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="control-group">
+                    <label for="stationSelect">Station:</label>
+                    <select id="stationSelect" disabled aria-label="Select Station">
+                        <option value="">Loading stations...</option>
+                    </select>
+                </div>
             </div>
-            <div class="control-group">
-                <label for="stationSelect">Station:</label>
-                <select id="stationSelect" disabled aria-label="Select Station">
-                    <option value="">Loading stations...</option>
-                </select>
+
+            <div class="progress-container" id="loading" aria-live="polite" aria-busy="false" style="display: none;">
+                <div class="progress-bar" id="progressBar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
             </div>
+            <div id="errorContainer" role="alert" aria-live="assertive"></div>
         </div>
 
-        <div class="progress-container" id="loading" aria-live="polite" aria-busy="false" style="display: none;">
-            <div class="progress-bar" id="progressBar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+        <div class="favorites-container" id="favoritesContent" style="display: none;">
+            <h2>Favorite Stations</h2>
+            <div id="favoritesList" class="favorites-list"></div>
         </div>
-        <div id="errorContainer" role="alert" aria-live="assertive"></div>
 
         <div class="player">
             <div class="now-playing" id="nowPlaying"><span>Select a station to play</span></div>
