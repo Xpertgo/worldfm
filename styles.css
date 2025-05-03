@@ -30,6 +30,66 @@ body {
     scroll-padding-bottom: 120px;
 }
 
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+nav {
+    display: flex;
+    align-items: center;
+}
+
+.toggle-btn {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 1.3em;
+    color: var(--text-light);
+    cursor: pointer;
+    padding: 7px;
+}
+
+.toggle-btn i {
+    font-size: 1.3em;
+    color: var(--text-light);
+    transition: color 0.3s ease;
+}
+
+.toggle-btn.active i {
+    color: var(--primary);
+}
+
+.menu {
+    list-style: none;
+    display: flex;
+    margin: 0;
+    padding: 0;
+    position: relative;
+}
+
+.menu li {
+    margin: 0 15px;
+}
+
+.menu a {
+    color: var(--text-light);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.3s ease;
+}
+
+.menu a:hover {
+    color: var(--primary);
+}
+
+.menu a.active {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
 h1 {
     font-size: 2.3em;
     font-weight: 700;
@@ -44,7 +104,7 @@ h1 {
 .controls {
     display: flex;
     gap: 15px;
-    margin-bottom: 20px;
+    margin-bottom: 15px;
     flex-wrap: wrap;
     background: var(--card-bg);
     padding: 25px;
@@ -70,7 +130,7 @@ h1 {
 }
 
 .control-group label {
-    font-size: 0.9em;
+    font-size: 0.8em;
     font-weight: 600;
     color: var(--secondary);
 }
@@ -152,7 +212,7 @@ input[type="text"]::placeholder {
     color: #000000;
 }
 
-#stationSelect option optgroup{
+#stationSelect option optgroup {
     color: #000000;
 }
 
@@ -375,10 +435,6 @@ button#playPauseBtn.active {
     flex-shrink: 0;
 }
 
-
-
-
-
 .progress-container {
     display: none;
     width: 100%;
@@ -479,13 +535,96 @@ button#playPauseBtn.active {
     color: #f1c40f;
 }
 
+/* Favorites Container Styles */
+.favorites-container {
+    background: var(--card-bg);
+    padding: 25px;
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow);
+    margin-bottom: 15px;
+}
+
+.favorites-container h2 {
+    font-size: 1.8em;
+    font-weight: 600;
+    margin: 0 0 20px;
+    background: linear-gradient(to right, var(--primary), var(--secondary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.favorites-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.favorite-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    transition: background 0.3s ease;
+}
+
+.favorite-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.favorite-item span {
+    font-size: 1em;
+    font-weight: 500;
+    color: #f1c40f;
+    flex: 1;
+    cursor: pointer;
+}
+
+.favorite-item span:hover {
+    color: var(--primary);
+}
+
+.favorite-item .favorite-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.favorite-item button {
+    width: 35px;
+    height: 35px;
+    font-size: 1em;
+}
+
+.favorite-item button.play-btn {
+    background: linear-gradient(45deg, var(--primary), var(--secondary));
+}
+
+.favorite-item button.remove-btn {
+    background: linear-gradient(45deg, #ff6b6b, #ff8e8e);
+}
+
+.favorite-item button.remove-btn:hover {
+    box-shadow: 0 0 15px rgba(255, 107, 107, 0.7);
+}
+
+.no-favorites {
+    font-size: 1em;
+    color: rgba(255, 255, 255, 0.7);
+    text-align: center;
+    padding: 20px;
+}
+
 @media (max-width: 600px) {
     body { padding: 10px; }
-    .container { padding-bottom: 100px; }
-    .controls { flex-direction: column; gap: 10px; padding: 15px; }
+    .container { padding-bottom: 150px; }
+    .controls { flex-direction: column; gap: 10px; padding: 15px; margin-bottom: 15px; }
     .control-group { width: 100%; }
     .player { flex-direction: column; padding: 10px; bottom: 5px; left: 10px; right: 10px; gap: 5px; max-width: calc(100% - 10px); }
-    .now-playing { text-align: center; font-size: 1em; max-width: 100%; }
+    .now-playing { text-align: center; font-size: 0.9em; max-width: 100%; }
     .now-playing.playing.overflowing span { animation: marquee 12s linear infinite; }
     .station-image-container { width: 60px; height: 60px; }
     .player-controls { flex-wrap: wrap; justify-content: center; }
@@ -493,7 +632,6 @@ button#playPauseBtn.active {
     .volume-control { width: 100%; justify-content: center; }
     .progress-container { margin: 10px auto 90px auto; }
     .progress-bar { height: 6px; }
-    #volume { width: 63%; }
     .error-container { flex-wrap: wrap; justify-content: center; }
     .retry-button { padding: 6px 12px; font-size: 0.85em; min-width: 80px; }
     #stationSearch {
@@ -510,5 +648,49 @@ button#playPauseBtn.active {
     #stationIcon {
         font-size: 2em;
         filter: drop-shadow(0 0 8px rgba(0, 180, 216, 0.5));
+    }
+    #volume {
+        width: 63%;
+    }
+    h1 {
+        font-size: 1.8em;
+        font-weight: 800;
+        text-align: left;
+        margin-top: 0px;
+    }
+    .toggle-btn {
+        display: block;
+    }
+    .menu {
+        display: none;
+        position: absolute;
+        top: 50px;
+        right: 0px;
+        width: 80%;
+        background: var(--background);
+        flex-direction: column;
+        padding: 10px 0;
+        box-shadow: var(--shadow);
+        z-index: 1000;
+    }
+    .menu.show {
+        display: flex;
+    }
+    .menu li {
+        margin: 10px 0;
+        text-align: center;
+    }
+    .favorites-container {
+        padding: 15px;
+    }
+    .favorites-container h2 {
+        font-size: 1.5em;
+    }
+    .favorite-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .favorite-item .favorite-actions {
+        margin-top: 10px;
     }
 }
