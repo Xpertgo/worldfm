@@ -232,6 +232,15 @@ input[type="text"]::placeholder {
     background-color: rgba(255, 215, 0, 0.2);
     color: #ffd700;
 }
+/* Change the color of "Favorites" and "Main" optgroup labels to black */
+optgroup[label="Favorites"],
+optgroup[label="Main"] {
+    color: black;
+}
+#stationSelect option.favorited {
+    background-color: rgba(255, 215, 0, 0.2);
+    color: #ffd700;
+}
 
 button {
     background: linear-gradient(45deg, var(--primary), var(--secondary));
