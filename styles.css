@@ -228,12 +228,12 @@ input[type="text"]::placeholder {
     color: #000000;
 }
 /* Change the color of "Favorites" and "Main" optgroup labels to black */
-#stationSelect optgroup[label="Favorites"],
-#stationSelect optgroup[label="Main"] {
+optgroup[label="Favorites"],
+optgroup[label="Main"] {
     color: black importent;
 }
 #stationSelect option.favorited {
-    background-color: rgba(255, 215, 0, 0.2);
+    background-color: rgba(255, 215, 0, 0.2) importent;
     color: #ffd700 importent;
 }
 
