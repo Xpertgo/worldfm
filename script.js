@@ -84,14 +84,20 @@ function initializeAudioElement() {
 
 initializeAudioElement();
 
-document.addEventListener('click', () => {
-    userInteracted = true;
-    console.log('User interaction detected, enabling autoplay.');
-    audioContext.resume().then(() => {
-        console.log('Audio context resumed');
-        keepAliveAudio.play().catch(err => console.warn('Keep-alive audio failed to start:', err));
-    }).catch(err => console.error('Failed to resume audio context:', err));
-}, { once: true });
+// Function to handle user interaction and resume audio context
+function handleUserInteraction() {
+    if (!userInteracted) {
+        userInteracted = true;
+        console.log('User interaction detected, enabling autoplay.');
+        audioContext.resume().then(() => {
+            console.log('Audio context resumed');
+            keepAliveAudio.play().catch(err => console.warn('Keep-alive audio failed to start:', err));
+        }).catch(err => console.error('Failed to resume audio context:', err));
+    }
+}
+
+// Attach global click listener for user interaction
+document.addEventListener('click', handleUserInteraction, { once: true });
 
 function updateStationVisuals(station = null, forceReset = false) {
     const stationImage = document.getElementById('stationImage');
@@ -1634,6 +1640,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const station = stations[parseInt(index)];
         console.log('Station selected:', { name: station.name, type, index });
         selectedFromFavorites = type === 'fav';
+        // Ensure user interaction is captured when selecting a station
+        handleUserInteraction();
         playStation(station);
     });
 
@@ -1645,6 +1653,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         lastPlayButtonClick = now;
+
+        // Ensure user interaction is captured when clicking Play
+        handleUserInteraction();
 
         if (!currentStation) {
             console.log('No station selected for play/pause');
@@ -1671,10 +1682,18 @@ document.addEventListener('DOMContentLoaded', () => {
     stopBtn.addEventListener('click', stopPlayback);
 
     const previousBtn = document.getElementById('previousBtn');
-    previousBtn.addEventListener('click', previousStation);
+    previousBtn.addEventListener('click', () => {
+        // Ensure user interaction is captured when clicking Previous
+        handleUserInteraction();
+        previousStation();
+    });
 
     const nextBtn = document.getElementById('nextBtn');
-    nextBtn.addEventListener('click', nextStation);
+    nextBtn.addEventListener('click', () => {
+        // Ensure user interaction is captured when clicking Next
+        handleUserInteraction();
+        nextStation();
+    });
 
     const favoriteBtn = document.getElementById('favoriteBtn');
     favoriteBtn.addEventListener('click', () => {
@@ -1739,7 +1758,7 @@ document.addEventListener('DOMContentLoaded', () => {
             playStation(currentStation);
         } else if (currentStation && !isPlaying && isManuallyPaused) {
             console.log('Network restored after manual pause, showing message');
-            showError("Network Restored.\nClick play button to resume.");
+            showError("Network Restored. Play button to resume.");
         }
     });
 
