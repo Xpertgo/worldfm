@@ -13,12 +13,13 @@ const SKIP_STREAM_TEST = true;
 const BATCH_SIZE = 50;
 const HEARTBEAT_INTERVAL = 5000;
 const CACHE_KEY = 'world_fm_radio_stations';
-const CACHE_DURATION = 24 * 60 * 60 * 1000;
+const CACHE_DURATION = 12 * 60 * 60 * 1000;
 const AUDIO_ERROR_RETRY_DELAY = 2000;
 const MAX_AUDIO_ERROR_RETRIES = 5;
 const INIT_RETRY_DELAY = 2000;
 const SILENCE_DETECTION_INTERVAL = 3000;
 const VOLUME_ANIMATION_DURATION = 300;
+const PLAY_BUTTON_DEBOUNCE = 500;
 
 const audio = new Audio();
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -51,6 +52,7 @@ let searchQuery = '';
 let previousVolume = 0.5;
 let isMuted = false;
 let lastPlayAttempt = 0;
+let lastPlayButtonClick = 0;
 
 const failedFaviconCache = new Set();
 
@@ -1067,6 +1069,30 @@ async function testStream(url) {
     }
 }
 
+async function checkAudioReady(audioElement) {
+    return new Promise((resolve) => {
+        if (audioElement.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+            console.log('Audio element ready:', { readyState: audioElement.readyState });
+            resolve(true);
+        } else {
+            console.log('Waiting for audio to be ready...', { readyState: audioElement.readyState });
+            audioElement.addEventListener('loadeddata', () => {
+                console.log('Audio data loaded:', { readyState: audioElement.readyState });
+                resolve(true);
+            }, { once: true });
+            audioElement.addEventListener('error', () => {
+                console.error('Audio failed to load data');
+                resolve(false);
+            }, { once: true });
+            // Timeout to avoid hanging
+            setTimeout(() => {
+                console.warn('Audio readiness check timed out');
+                resolve(false);
+            }, 5000);
+        }
+    });
+}
+
 async function playStation(station) {
     if (isOffline) {
         showError('You are offline!\nPlease check your internet connection.');
@@ -1161,6 +1187,12 @@ async function playStation(station) {
         audio.muted = isMuted;
         console.log('Starting playback...', { url, volume: audio.volume, muted: isMuted });
 
+        // Wait for audio to be ready
+        const isReady = await checkAudioReady(audio);
+        if (!isReady) {
+            throw new Error('Audio failed to load: stream not ready');
+        }
+
         // Attempt playback with timeout
         const playPromise = audio.play();
         const timeoutPromise = new Promise((_, reject) => {
@@ -1199,6 +1231,10 @@ async function playStation(station) {
             errorMessage = `Stream for ${station.name} is unreachable.\nPlease try another station.`;
         } else if (error.message.includes('user interaction required')) {
             errorMessage = `Please interact with the page (e.g., click) to play ${station.name}.`;
+        } else if (error.message.includes('stream not ready')) {
+            errorMessage = `Stream for ${station.name} failed to load.\nPlease try again or select another station.`;
+        } else if (error.message.includes('play() request was interrupted')) {
+            errorMessage = `Playback of ${station.name} was interrupted.\nPlease try again.`;
         }
         showError(errorMessage);
     } finally {
@@ -1573,6 +1609,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const playPauseBtn = document.getElementById('playPauseBtn');
     playPauseBtn.addEventListener('click', () => {
+        const now = Date.now();
+        if (now - lastPlayButtonClick < PLAY_BUTTON_DEBOUNCE) {
+            console.warn('Play button click debounced: too frequent');
+            return;
+        }
+        lastPlayButtonClick = now;
+
         if (!currentStation) {
             console.log('No station selected for play/pause');
             showError('Please select a station first!');
@@ -1664,6 +1707,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentStation && !isPlaying && !isManuallyPaused) {
             console.log('Network restored, resuming playback');
             playStation(currentStation);
+        } else if (currentStation && !isPlaying && isManuallyPaused) {
+            console.log('Network restored after manual pause, showing message');
+            showError("Network Restored.\nClick Play button to resume.");
         }
     });
 
