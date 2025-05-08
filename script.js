@@ -999,18 +999,25 @@ function renderFavoritesList() {
                 : `Play ${station.name}`
         );
         playBtn.addEventListener('click', () => {
+            const now = Date.now();
+            if (now - lastPlayButtonClick < PLAY_BUTTON_DEBOUNCE) {
+                console.warn('Play button click debounced: too frequent');
+                return;
+            }
+            lastPlayButtonClick = now;
+
+            handleUserInteraction();
+
             if (currentStation && station.url === currentStation.url && isPlaying) {
-                console.log('Pausing current station:', station.name);
-                audio.pause();
+                console.log('Pausing current station from favorites list:', station.name);
+                isPlaying = false; // Update state immediately
                 isManuallyPaused = true;
-                isPlaying = false;
+                audio.pause();
                 stopHeartbeat();
                 stopSilenceDetection();
                 releaseWakeLock();
-                updatePlayerDisplay();
+                updatePlayerDisplay(); // This will update both main player and favorites buttons
                 showError("Paused! Click play to resume");
-                playBtn.innerHTML = '<i class="fas fa-play"></i>';
-                playBtn.setAttribute('aria-label', `Play ${station.name}`);
             } else {
                 console.log('Playing favorite station:', station.name);
                 selectedFromFavorites = true;
@@ -1019,10 +1026,7 @@ function renderFavoritesList() {
                 if (stationIndex >= 0) {
                     document.getElementById('stationSelect').value = `fav-${stationIndex}`;
                 }
-                playBtn.innerHTML = '<i class="fas fa-pause"></i>';
-                playBtn.setAttribute('aria-label', `Pause ${station.name}`);
             }
-            updateFavoriteItemButtons();
         });
 
         const removeBtn = document.createElement('button');
@@ -1059,14 +1063,17 @@ function updateFavoriteItemButtons() {
         const playBtn = item.querySelector('.play-btn');
         const station = getFavorites().find(f => f.name === stationName);
         if (station && playBtn) {
-            playBtn.innerHTML = (currentStation && station.url === currentStation.url && isPlaying)
+            const isCurrentStationPlaying = currentStation && station.url === currentStation.url && isPlaying;
+            playBtn.innerHTML = isCurrentStationPlaying
                 ? '<i class="fas fa-pause"></i>'
                 : '<i class="fas fa-play"></i>';
             playBtn.setAttribute('aria-label',
-                (currentStation && station.url === currentStation.url && isPlaying)
+                isCurrentStationPlaying
                     ? `Pause ${station.name}`
                     : `Play ${station.name}`
             );
+            playBtn.disabled = isOffline;
+            console.log(`Updated favorite item button for ${station.name}:`, { isPlaying: isCurrentStationPlaying });
         }
     });
 }
@@ -1458,7 +1465,6 @@ function stopPlayback() {
     isPlaying = false;
     isManuallyPaused = true;
     currentStation = null;
-    // Reset the station dropdown to "Select Station"
     document.getElementById('stationSelect').value = "";
     stopHeartbeat();
     stopSilenceDetection();
@@ -1551,6 +1557,7 @@ function updatePlayerDisplay() {
     muteBtn.disabled = !currentStation || isOffline;
 
     updateFavoriteButton();
+    updateFavoriteItemButtons(); // Ensure favorites buttons are updated whenever player display updates
     console.log('Player display updated:', {
         station: currentStation?.name,
         isPlaying,
@@ -1646,17 +1653,17 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         if (isPlaying) {
-            console.log('Pausing playback');
-            audio.pause();
+            console.log('Pausing playback from main player');
+            isPlaying = false; // Update state immediately
             isManuallyPaused = true;
-            isPlaying = false;
+            audio.pause();
             stopHeartbeat();
             stopSilenceDetection();
             releaseWakeLock();
-            updatePlayerDisplay();
+            updatePlayerDisplay(); // This will update both main player and favorites buttons
             showError("Paused! Click play to resume");
         } else {
-            console.log('Initiating playback for station:', currentStation.name);
+            console.log('Initiating playback for station from main player:', currentStation.name);
             playStation(currentStation);
         }
     });
