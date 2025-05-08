@@ -290,7 +290,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 1341
     },
     {
-        "name": "Aakashvani",
+        "name": "aakashvani",
         "url": "https://audio-edge-fvq45.ams.d.radiomast.io/3ccc1156-fcf8-4ba7-9a0c-28e3a465e1ae?listening-from-radio-garden=1607152226837",
         "url_resolved": "https://audio-edge-fvq45.ams.d.radiomast.io/3ccc1156-fcf8-4ba7-9a0c-28e3a465e1ae?listening-from-radio-garden=1607152226837",
         "favicon": "https://radiosindia.com/images/aakashvani.jpg",
@@ -300,7 +300,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 121
     },
     {
-        "name": "Aalayam-fm",
+        "name": "aalayam-fm",
         "url": "https://stream.zeno.fm/etwnrhnbkbruv",
         "url_resolved": "https://stream-175.zeno.fm/etwnrhnbkbruv?zt=eyJhbGciOiJIUzI1NiJ9.eyJzdHJlYW0iOiJldHducmhuYmticnV2IiwiaG9zdCI6InN0cmVhbS0xNzUuemVuby5mbSIsInRtIjpmYWxzZSwicnR0bCI6NSwianRpIjoiYmsyTy1UTkZSa0M0dktucFp5NTdnUSIsImlhdCI6MTc0NTczNTY2NiwiZXhwIjoxNzQ1NzM1NzI2fQ.ZPRWeLM6HYlqHG2g3fophvVzpQqCYA1zZwb_DU_TRek",
         "favicon": "https://liveradios.in/wp-content/uploads/Aalayam-FM.jpg",
@@ -320,7 +320,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 94
     },
     {
-        "name": "Aasman Radio",
+        "name": "aasmanradio",
         "url": "https://aasman_radio.ice.infomaniak.ch/aasmanradio.mp3",
         "url_resolved": "https://aasman_radio.ice.infomaniak.ch/aasmanradio.mp3",
         "favicon": "https://radiosindia.com/images/aasmanradio.jpg",
