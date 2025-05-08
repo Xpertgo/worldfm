@@ -1172,11 +1172,16 @@ async function playStation(station) {
             }
         }
 
-        // Skip stream test to allow more streams to play
+        // Validate the final URL after playlist resolution
+        if (!url || !/^https?:\/\//.test(url)) {
+            throw new Error('Station URL is invalid or empty after resolution');
+        }
+
+        // Skip stream test if configured to do so
         if (!SKIP_STREAM_TEST) {
             const isStreamValid = await testStream(url);
             if (!isStreamValid) {
-                throw new Error('Stream test failed: Invalid or unreachable stream');
+                throw new Error('Stream test failed: This station isn’t supported by your device.');
             }
         }
 
@@ -1223,12 +1228,14 @@ async function playStation(station) {
         let errorMessage = `We couldn’t play ${station.name}.\nPlease try another station.`;
         if (error.message.includes('Invalid stream URL')) {
             errorMessage = `Invalid URL for ${station.name}.\nPlease select another station.`;
+        } else if (error.message.includes('Station URL is invalid or empty after resolution')) {
+            errorMessage = `Station URL is invalid or empty for ${station.name}.\nPlease try another station.`;
         } else if (error.message.includes('playlist')) {
             errorMessage = `Unable to load playlist for ${station.name}.\nPlease try another station.`;
         } else if (error.message.includes('timed out')) {
             errorMessage = `Connection to ${station.name} timed out.\nPlease try again or select another station.`;
         } else if (error.message.includes('Stream test failed')) {
-            errorMessage = `Stream for ${station.name} is unreachable.\nPlease try another station.`;
+            errorMessage = `This station isn’t supported by your device.\nPlease try another station.`;
         } else if (error.message.includes('user interaction required')) {
             errorMessage = `Please interact with the page (e.g., click) to play ${station.name}.`;
         } else if (error.message.includes('stream not ready')) {
@@ -1709,7 +1716,7 @@ document.addEventListener('DOMContentLoaded', () => {
             playStation(currentStation);
         } else if (currentStation && !isPlaying && isManuallyPaused) {
             console.log('Network restored after manual pause, showing message');
-            showError("Network Restored.\nClick Play button to resume.");
+            showError("Network Restored.\nClick play button to resume.");
         }
     });
 
