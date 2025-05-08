@@ -227,14 +227,10 @@ input[type="text"]::placeholder {
 #stationSelect option.medium-votes {
     color: #000000;
 }
-/* Change the color of "Favorites" and "Main" optgroup labels to black */
-optgroup[label="Favorites"],
-optgroup[label="Main"] {
-    color: black importent;
-}
+
 #stationSelect option.favorited {
-    background-color: rgba(255, 215, 0, 0.2) importent;
-    color: #ffd700 importent;
+    background-color: rgba(255, 215, 0, 0.2);
+    color: #ffd700;
 }
 
 button {
@@ -573,8 +569,7 @@ button#playPauseBtn.active {
     padding: 10px;
     background: rgba(255, 255, 255, 0.03);
     border-radius: 8px;
-    transition: all 0.3s ease;
-    position: relative;
+    transition: background 0.3s ease;
 }
 
 .favorite-item:hover {
@@ -616,36 +611,12 @@ button#playPauseBtn.active {
     box-shadow: 0 0 15px rgba(255, 107, 107, 0.7);
 }
 
-.favorite-item button.move-btn {
-    background: linear-gradient(45deg, #6b7280, #9ca3af);
-    width: 35px;
-    height: 35px;
-    font-size: 1em;
-}
-
-.favorite-item button.move-btn:hover {
-    box-shadow: 0 0 15px rgba(107, 114, 128, 0.7);
-}
-
-.favorite-item button.move-btn:disabled {
-    background: linear-gradient(45deg, #4b5563, #6b7280);
-    opacity: 0.5;
-    cursor: not-allowed;
-    box-shadow: none;
-}
-
-.favorite-item button.up-btn i,
-.favorite-item button.down-btn i {
-    font-size: 0.9em;
-}
-
 .no-favorites {
     font-size: 1em;
     color: rgba(255, 255, 255, 0.7);
     text-align: center;
     padding: 20px;
 }
-
 /* About Container Styles */
 .about-container {
     background: var(--card-bg);
@@ -658,7 +629,7 @@ button#playPauseBtn.active {
 }
 
 .about-container h2 {
-    font-size: 1.8em;
+    font-size: 1.5em;
     font-weight: 600;
     margin: 0 0 20px;
     background: linear-gradient(to right, var(--primary), var(--secondary));
@@ -785,19 +756,5 @@ button#playPauseBtn.active {
     }
     .favorite-item .favorite-actions {
         margin-top: 10px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-    .favorite-item button {
-        width: 32px;
-        height: 32px;
-        font-size: 0.9em;
-    }
-    .about-container {
-        padding: 15px;
-    }
-    .about-container h2 {
-        font-size: 1.5em;
     }
 }
