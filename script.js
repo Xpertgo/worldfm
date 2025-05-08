@@ -50,6 +50,7 @@ let selectedFromFavorites = false;
 let searchQuery = '';
 let previousVolume = 0.5;
 let isMuted = false;
+let lastPlayAttempt = 0;
 
 const failedFaviconCache = new Set();
 
@@ -151,12 +152,20 @@ function getAudioErrorMessage(error) {
 }
 
 audio.addEventListener('suspend', () => {
-    console.warn('Audio suspended, attempting to resume...', { isPlaying, isOffline, isManuallyPaused });
-    if (isPlaying && currentStation && !isOffline && !isManuallyPaused) {
-        audioContext.resume().then(() => audio.play()).catch(err => {
-            console.error('Failed to resume audio on suspend:', err);
+    console.warn('Audio suspended, checking state...', { isPlaying, isOffline, isManuallyPaused });
+    if (isPlaying && currentStation && !isOffline && !isManuallyPaused && audio.src) {
+        console.log('Attempting to resume audio...');
+        audioContext.resume().then(() => {
+            audio.play().catch(err => {
+                console.error('Failed to resume audio on suspend:', err);
+                showError("The music paused unexpectedly.\nPlease press play to resume.");
+            });
+        }).catch(err => {
+            console.error('Failed to resume audio context on suspend:', err);
             showError("The music paused unexpectedly.\nPlease press play to resume.");
         });
+    } else {
+        console.log('No resume needed: audio not playing or manually paused');
     }
 });
 
@@ -1063,6 +1072,21 @@ async function playStation(station) {
         showError('You are offline!\nPlease check your internet connection.');
         return;
     }
+
+    if (!station || !station.url) {
+        console.error('Invalid station or missing URL:', station);
+        showError('No valid station selected.\nPlease choose another station.');
+        return;
+    }
+
+    // Debounce rapid station changes
+    const now = Date.now();
+    if (now - lastPlayAttempt < 500) {
+        console.warn('Station change debounced: too frequent');
+        return;
+    }
+    lastPlayAttempt = now;
+
     console.log('Attempting to play station:', { name: station.name, url: station.url, favicon: station.favicon });
     clearError();
     showLoading(true);
@@ -1070,48 +1094,81 @@ async function playStation(station) {
     isManuallyPaused = false;
     isPlaying = false;
 
+    // Fully reset audio state
     audio.pause();
     audio.src = '';
     audio.load();
+    stopHeartbeat();
+    stopSilenceDetection();
     currentStation = station;
 
     updateStationVisuals(station);
     updatePlayerDisplay();
 
     try {
-        let url = station.url_resolved || station.url;
-        console.log('Resolved URL:', url);
-        if (url.endsWith('.m3u') || url.endsWith('.pls')) {
-            console.log('Fetching playlist file:', url);
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`Failed to fetch playlist: ${response.statusText}`);
-            const text = await response.text();
-            const lines = text.split('\n');
-            let foundStreamUrl = false;
-            for (const line of lines) {
-                if (line.trim().startsWith('http')) {
-                    url = line.trim();
-                    foundStreamUrl = true;
-                    console.log('Found stream URL in playlist:', url);
-                    break;
-                }
+        // Ensure audio context is resumed
+        if (audioContext.state === 'suspended') {
+            if (!userInteracted) {
+                throw new Error('Audio context suspended: user interaction required');
             }
-            if (!foundStreamUrl) throw new Error('No valid stream URL found in playlist');
+            await audioContext.resume();
+            console.log('Audio context resumed for playback');
         }
 
+        let url = station.url_resolved || station.url;
+        if (!url || !/^https?:\/\//.test(url)) {
+            throw new Error('Invalid stream URL');
+        }
+        console.log('Resolved URL:', url);
+
+        // Handle playlist files (.m3u, .pls)
+        if (url.endsWith('.m3u') || url.endsWith('.pls')) {
+            console.log('Fetching playlist file:', url);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            try {
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch playlist: ${response.statusText}`);
+                }
+                const text = await response.text();
+                const lines = text.split('\n');
+                const streamUrl = lines.find(line => line.trim().startsWith('http'));
+                if (!streamUrl) {
+                    throw new Error('No valid stream URL found in playlist');
+                }
+                url = streamUrl.trim();
+                console.log('Found stream URL in playlist:', url);
+            } catch (err) {
+                console.error('Playlist fetch failed:', err.message);
+                throw new Error('Unable to process playlist file');
+            }
+        }
+
+        // Skip stream test to allow more streams to play
         if (!SKIP_STREAM_TEST) {
             const isStreamValid = await testStream(url);
             if (!isStreamValid) {
-                throw new Error('Stream test failed');
+                throw new Error('Stream test failed: Invalid or unreachable stream');
             }
         }
 
+        // Configure audio element
         audio.src = url;
-        audio.volume = document.getElementById('volume') ? document.getElementById('volume').value : 0.5;
+        audio.crossOrigin = 'anonymous';
+        audio.volume = document.getElementById('volume') ? parseFloat(document.getElementById('volume').value) : 0.5;
         audio.muted = isMuted;
         console.log('Starting playback...', { url, volume: audio.volume, muted: isMuted });
-        await audioContext.resume();
-        await audio.play();
+
+        // Attempt playback with timeout
+        const playPromise = audio.play();
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Playback timed out')), 15000);
+        });
+
+        await Promise.race([playPromise, timeoutPromise]);
+
         isPlaying = true;
         hasError = false;
         const stationIndex = stations.indexOf(station);
@@ -1131,7 +1188,19 @@ async function playStation(station) {
         console.error('Failed to play station:', error.message, { station });
         hasError = true;
         isPlaying = false;
-        showError(`We couldn’t play ${station.name}.\nPlease try another station.`);
+        let errorMessage = `We couldn’t play ${station.name}.\nPlease try another station.`;
+        if (error.message.includes('Invalid stream URL')) {
+            errorMessage = `Invalid URL for ${station.name}.\nPlease select another station.`;
+        } else if (error.message.includes('playlist')) {
+            errorMessage = `Unable to load playlist for ${station.name}.\nPlease try another station.`;
+        } else if (error.message.includes('timed out')) {
+            errorMessage = `Connection to ${station.name} timed out.\nPlease try again or select another station.`;
+        } else if (error.message.includes('Stream test failed')) {
+            errorMessage = `Stream for ${station.name} is unreachable.\nPlease try another station.`;
+        } else if (error.message.includes('user interaction required')) {
+            errorMessage = `Please interact with the page (e.g., click) to play ${station.name}.`;
+        }
+        showError(errorMessage);
     } finally {
         showLoading(false);
     }
@@ -1413,7 +1482,7 @@ function updatePlayerDisplay() {
 
     nowPlaying.innerHTML = currentStation
         ? `<span>Now Playing: ${currentStation.name}</span>`
-        : '<span>Select a station to play</span>';
+        : `<span>Select a station to play</span>`;
     nowPlaying.classList.toggle('playing', isPlaying && !!currentStation);
     nowPlaying.classList.toggle('overflowing', currentStation && currentStation.name.length > 20);
 
