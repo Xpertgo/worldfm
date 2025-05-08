@@ -53,6 +53,7 @@ let previousVolume = 0.5;
 let isMuted = false;
 let lastPlayAttempt = 0;
 let lastPlayButtonClick = 0;
+let isStopping = false;
 
 const failedFaviconCache = new Set();
 
@@ -61,19 +62,16 @@ keepAliveAudio.loop = true;
 keepAliveAudio.volume = 0;
 
 function initializeAudioElement() {
-    // Remove existing audio element if it exists
     if (audio) {
         audio.pause();
         audio.remove();
     }
-    // Create a new audio element
     audio = new Audio();
     audio.autoplay = false;
     audio.preload = 'auto';
     audio.setAttribute('playsinline', '');
     audio.setAttribute('crossorigin', 'anonymous');
     document.body.appendChild(audio);
-    // Reconnect audio context
     sourceNode = audioContext.createMediaElementSource(audio);
     analyser = audioContext.createAnalyser();
     sourceNode.connect(analyser);
@@ -84,7 +82,6 @@ function initializeAudioElement() {
 
 initializeAudioElement();
 
-// Function to handle user interaction and resume audio context
 function handleUserInteraction() {
     if (!userInteracted) {
         userInteracted = true;
@@ -96,7 +93,6 @@ function handleUserInteraction() {
     }
 }
 
-// Attach global click listener for user interaction
 document.addEventListener('click', handleUserInteraction, { once: true });
 
 function updateStationVisuals(station = null, forceReset = false) {
@@ -224,7 +220,10 @@ audio.addEventListener('pause', () => {
 });
 
 audio.addEventListener('error', (e) => {
-    if (isChecking) return;
+    if (isChecking || isStopping) {
+        console.log('Ignoring audio error during checking or stopping', { isChecking, isStopping });
+        return;
+    }
     hasError = true;
     console.error('Audio error occurred:', e, { code: e.target?.error?.code, message: e.target?.error?.message });
     stopHeartbeat();
@@ -420,7 +419,6 @@ async function getUserCountryCode() {
 }
 
 async function initializeApp(retryCount = 0) {
-    // Reset userInteracted on app load to ensure fresh user interaction
     userInteracted = false;
     console.log('Initializing app...', { retryCount, userInteracted });
 
@@ -483,7 +481,6 @@ async function initializeApp(retryCount = 0) {
 
         if (lastStation && !isOffline) {
             console.log('Attempting to restore last station:', lastStation.name);
-            // Validate the lastStation URL before proceeding
             const stationUrl = lastStation.url_resolved || lastStation.url;
             if (!stationUrl || !/^https?:\/\//.test(stationUrl)) {
                 console.warn('Last station has invalid URL, clearing:', stationUrl);
@@ -496,7 +493,6 @@ async function initializeApp(retryCount = 0) {
                     currentStation = station;
                     updateStationVisuals(station);
                     updatePlayerDisplay();
-                    // Only prompt to play; do not auto-play without user interaction
                     console.log('Showing restore message for station:', station.name);
                     showError(`Your last station, ${station.name}, is ready!\nTap play to listen.`);
                 } else {
@@ -666,7 +662,7 @@ function handleCountryChange(e) {
         updateSearchVisibility();
         document.getElementById('languageSelect').innerHTML = '<option value="">Select country first</option>';
         document.getElementById('languageSelect').disabled = true;
-        document.getElementById('stationSelect').innerHTML = '<option value="">Select language first</option>';
+        document.getElementById('stationSelect').innerHTML = '<option value="">Select Station</option>';
         document.getElementById('stationSelect').disabled = true;
         console.log('Country reset, clearing language and station options');
     }
@@ -852,13 +848,11 @@ function renderStationList(isLanguageChange = false) {
     stationSelect.innerHTML = '<option value="">Select Station</option>';
     const favorites = getFavorites();
 
-    // Create optgroups for Favorites and Main stations
     const favGroup = document.createElement('optgroup');
     favGroup.label = 'Favorites';
     const mainGroup = document.createElement('optgroup');
     mainGroup.label = 'Main';
 
-    // Append optgroups only if they will have content
     if (favorites.length > 0) {
         stationSelect.appendChild(favGroup);
     }
@@ -878,7 +872,6 @@ function renderStationList(isLanguageChange = false) {
             const isFav = isFavorite(station);
             console.log('Rendering station:', { name: station.name, isFavorite: isFav });
 
-            // Create main option
             const mainOption = document.createElement('option');
             mainOption.value = `main-${index}`;
             mainOption.textContent = `${isFav ? '★ ' : ''}${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
@@ -889,7 +882,6 @@ function renderStationList(isLanguageChange = false) {
             else mainOption.classList.add('medium-votes');
             mainFragment.appendChild(mainOption);
 
-            // Create favorite option if station is favorited
             if (isFav) {
                 const favOption = document.createElement('option');
                 favOption.value = `fav-${index}`;
@@ -1102,7 +1094,7 @@ async function testStream(url) {
 
 async function checkAudioReady(audioElement) {
     return new Promise((resolve) => {
-        if (audioElement.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+        if (audioElement.readyState >= 2) {
             console.log('Audio element ready:', { readyState: audioElement.readyState });
             resolve(true);
         } else {
@@ -1115,7 +1107,6 @@ async function checkAudioReady(audioElement) {
                 console.error('Audio failed to load data');
                 resolve(false);
             }, { once: true });
-            // Timeout to avoid hanging
             setTimeout(() => {
                 console.warn('Audio readiness check timed out');
                 resolve(false);
@@ -1136,7 +1127,6 @@ async function playStation(station) {
         return;
     }
 
-    // Debounce rapid station changes
     const now = Date.now();
     if (now - lastPlayAttempt < 500) {
         console.warn('Station change debounced: too frequent');
@@ -1151,7 +1141,6 @@ async function playStation(station) {
     isManuallyPaused = false;
     isPlaying = false;
 
-    // Fully reset audio element by reinitializing it
     initializeAudioElement();
     stopHeartbeat();
     stopSilenceDetection();
@@ -1161,7 +1150,6 @@ async function playStation(station) {
     updatePlayerDisplay();
 
     try {
-        // Ensure audio context is resumed
         if (audioContext.state === 'suspended') {
             if (!userInteracted) {
                 throw new Error('Audio context suspended: user interaction required');
@@ -1176,7 +1164,6 @@ async function playStation(station) {
         }
         console.log('Resolved URL:', url);
 
-        // Handle playlist files (.m3u, .pls)
         if (url.endsWith('.m3u') || url.endsWith('.pls')) {
             console.log('Fetching playlist file:', url);
             const controller = new AbortController();
@@ -1201,12 +1188,10 @@ async function playStation(station) {
             }
         }
 
-        // Validate the final URL after playlist resolution
         if (!url || !/^https?:\/\//.test(url)) {
             throw new Error('Station URL is invalid or empty after resolution');
         }
 
-        // Skip stream test if configured to do so
         if (!SKIP_STREAM_TEST) {
             const isStreamValid = await testStream(url);
             if (!isStreamValid) {
@@ -1214,20 +1199,17 @@ async function playStation(station) {
             }
         }
 
-        // Configure audio element
         audio.src = url;
         audio.crossOrigin = 'anonymous';
         audio.volume = document.getElementById('volume') ? parseFloat(document.getElementById('volume').value) : 0.5;
         audio.muted = isMuted;
         console.log('Starting playback...', { url, volume: audio.volume, muted: isMuted });
 
-        // Wait for audio to be ready
         const isReady = await checkAudioReady(audio);
         if (!isReady) {
             throw new Error('Audio failed to load: stream not ready');
         }
 
-        // Attempt playback with timeout
         const playPromise = audio.play();
         const timeoutPromise = new Promise((_, reject) => {
             setTimeout(() => reject(new Error('Playback timed out')), 15000);
@@ -1319,7 +1301,7 @@ function toggleMute() {
     muteBtn.setAttribute('aria-label', isMuted ? 'Unmute' : 'Mute');
 
     if (isMuted) {
-        previousVolume = audio.volume || 0.5; // Store current volume or default to 0.5
+        previousVolume = audio.volume || 0.5;
         animateVolumeChange(audio.volume * 100, 0, () => {
             audio.volume = 0;
             audio.muted = true;
@@ -1328,7 +1310,7 @@ function toggleMute() {
             console.log('Muted with animation', { volume: audio.volume, isMuted });
         });
     } else {
-        const targetVolume = previousVolume || 0.5; // Restore previous volume or default to 0.5
+        const targetVolume = previousVolume || 0.5;
         animateVolumeChange(0, targetVolume * 100, () => {
             audio.volume = targetVolume;
             audio.muted = false;
@@ -1469,22 +1451,27 @@ function stopHeartbeat() {
 
 function stopPlayback() {
     console.log('Stopping playback');
+    isStopping = true;
     audio.pause();
     audio.src = '';
     audio.load();
     isPlaying = false;
     isManuallyPaused = true;
     currentStation = null;
+    // Reset the station dropdown to "Select Station"
+    document.getElementById('stationSelect').value = "";
     stopHeartbeat();
     stopSilenceDetection();
     releaseWakeLock();
     updateStationVisuals(null, true);
     updatePlayerDisplay();
     updateMediaSession();
-    clearError();
-    document.getElementById('stationSelect').value = '';
-    
-    console.log('Playback stopped, state reset');
+    showError("Music must be stopped manually.");
+    setTimeout(() => {
+        isStopping = false;
+        console.log('Stopping flag reset');
+    }, 500);
+    console.log('Playback stopped, state reset, station dropdown reset to "Select Station"');
 }
 
 function previousStation() {
@@ -1600,12 +1587,10 @@ function setupNavigation() {
             navLinks.forEach(l => l.classList.remove('active'));
             link.classList.add('active');
 
-            // Hide all content sections
             mainContent.style.display = 'none';
             favoritesContent.style.display = 'none';
             aboutContent.style.display = 'none';
 
-            // Show the selected content section
             if (view === 'home') {
                 mainContent.style.display = 'block';
             } else if (view === 'favorites') {
@@ -1640,7 +1625,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const station = stations[parseInt(index)];
         console.log('Station selected:', { name: station.name, type, index });
         selectedFromFavorites = type === 'fav';
-        // Ensure user interaction is captured when selecting a station
         handleUserInteraction();
         playStation(station);
     });
@@ -1654,7 +1638,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         lastPlayButtonClick = now;
 
-        // Ensure user interaction is captured when clicking Play
         handleUserInteraction();
 
         if (!currentStation) {
@@ -1683,14 +1666,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const previousBtn = document.getElementById('previousBtn');
     previousBtn.addEventListener('click', () => {
-        // Ensure user interaction is captured when clicking Previous
         handleUserInteraction();
         previousStation();
     });
 
     const nextBtn = document.getElementById('nextBtn');
     nextBtn.addEventListener('click', () => {
-        // Ensure user interaction is captured when clicking Next
         handleUserInteraction();
         nextStation();
     });
@@ -1709,7 +1690,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const volume = parseFloat(volumeInput.value);
         if (volume === 0) {
             isMuted = true;
-            previousVolume = previousVolume || 0.5; // Store last non-zero volume or default
+            previousVolume = previousVolume || 0.5;
             audio.volume = 0;
             audio.muted = true;
             volumeLevel.textContent = '0%';
@@ -1758,7 +1739,7 @@ document.addEventListener('DOMContentLoaded', () => {
             playStation(currentStation);
         } else if (currentStation && !isPlaying && isManuallyPaused) {
             console.log('Network restored after manual pause, showing message');
-            showError("Network Restored. Play button to resume.");
+            showError("Network Restored.\nClick play button to resume.");
         }
     });
 
