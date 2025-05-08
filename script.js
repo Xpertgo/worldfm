@@ -21,10 +21,10 @@ const SILENCE_DETECTION_INTERVAL = 3000;
 const VOLUME_ANIMATION_DURATION = 300;
 const PLAY_BUTTON_DEBOUNCE = 500;
 
-const audio = new Audio();
-const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-const sourceNode = audioContext.createMediaElementSource(audio);
-const analyser = audioContext.createAnalyser();
+let audio = new Audio();
+let audioContext = new (window.AudioContext || window.webkitAudioContext)();
+let sourceNode = audioContext.createMediaElementSource(audio);
+let analyser = audioContext.createAnalyser();
 sourceNode.connect(analyser);
 analyser.connect(audioContext.destination);
 analyser.fftSize = 256;
@@ -60,11 +60,29 @@ const keepAliveAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAA
 keepAliveAudio.loop = true;
 keepAliveAudio.volume = 0;
 
-audio.autoplay = false;
-audio.preload = 'auto';
-audio.setAttribute('playsinline', '');
-audio.setAttribute('crossorigin', 'anonymous');
-document.body.appendChild(audio);
+function initializeAudioElement() {
+    // Remove existing audio element if it exists
+    if (audio) {
+        audio.pause();
+        audio.remove();
+    }
+    // Create a new audio element
+    audio = new Audio();
+    audio.autoplay = false;
+    audio.preload = 'auto';
+    audio.setAttribute('playsinline', '');
+    audio.setAttribute('crossorigin', 'anonymous');
+    document.body.appendChild(audio);
+    // Reconnect audio context
+    sourceNode = audioContext.createMediaElementSource(audio);
+    analyser = audioContext.createAnalyser();
+    sourceNode.connect(analyser);
+    analyser.connect(audioContext.destination);
+    analyser.fftSize = 256;
+    console.log('Audio element reinitialized');
+}
+
+initializeAudioElement();
 
 document.addEventListener('click', () => {
     userInteracted = true;
@@ -396,7 +414,10 @@ async function getUserCountryCode() {
 }
 
 async function initializeApp(retryCount = 0) {
-    console.log('Initializing app...', { retryCount });
+    // Reset userInteracted on app load to ensure fresh user interaction
+    userInteracted = false;
+    console.log('Initializing app...', { retryCount, userInteracted });
+
     const requiredElements = ['countrySelect', 'volumeLevel', 'errorContainer', 'loading', 'stationImage', 'stationIcon', 'stationSearch', 'clearSearchBtn', 'mainContent', 'favoritesContent', 'favoritesList', 'muteBtn', 'aboutContent'];
     if (!requiredElements.every(id => document.getElementById(id))) {
         console.error('Required DOM elements missing:', requiredElements.filter(id => !document.getElementById(id)));
@@ -456,22 +477,26 @@ async function initializeApp(retryCount = 0) {
 
         if (lastStation && !isOffline) {
             console.log('Attempting to restore last station:', lastStation.name);
-            const station = countryStations.find(s => s.url === lastStation.url);
-            if (station) {
-                console.log('Last station found in countryStations:', station.name);
-                currentStation = station;
-                updateStationVisuals(station);
-                updatePlayerDisplay();
-                if (userInteracted) {
-                    console.log('User interacted, attempting to play last station');
-                    await playStation(station);
-                } else {
-                    console.log('No user interaction, showing restore message for station:', station.name);
-                    showError(`Your last station, ${station.name}, is ready!\nTap play to listen.`);
-                }
-            } else {
-                console.warn('Last station not found in countryStations, clearing lastStation');
+            // Validate the lastStation URL before proceeding
+            const stationUrl = lastStation.url_resolved || lastStation.url;
+            if (!stationUrl || !/^https?:\/\//.test(stationUrl)) {
+                console.warn('Last station has invalid URL, clearing:', stationUrl);
                 localStorage.removeItem('lastStation');
+                lastStation = null;
+            } else {
+                const station = countryStations.find(s => s.url === lastStation.url);
+                if (station) {
+                    console.log('Last station found in countryStations:', station.name);
+                    currentStation = station;
+                    updateStationVisuals(station);
+                    updatePlayerDisplay();
+                    // Only prompt to play; do not auto-play without user interaction
+                    console.log('Showing restore message for station:', station.name);
+                    showError(`Your last station, ${station.name}, is ready!\nTap play to listen.`);
+                } else {
+                    console.warn('Last station not found in countryStations, clearing lastStation');
+                    localStorage.removeItem('lastStation');
+                }
             }
         }
 
@@ -1120,10 +1145,8 @@ async function playStation(station) {
     isManuallyPaused = false;
     isPlaying = false;
 
-    // Fully reset audio state
-    audio.pause();
-    audio.src = '';
-    audio.load();
+    // Fully reset audio element by reinitializing it
+    initializeAudioElement();
     stopHeartbeat();
     stopSilenceDetection();
     currentStation = station;
