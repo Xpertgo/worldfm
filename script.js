@@ -1472,7 +1472,7 @@ function stopPlayback() {
     updateStationVisuals(null, true);
     updatePlayerDisplay();
     updateMediaSession();
-    showError("Music must be stopped manually.");
+    showError("Music is manually stopped.");
     setTimeout(() => {
         isStopping = false;
         console.log('Stopping flag reset');
