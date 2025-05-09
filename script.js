@@ -54,12 +54,33 @@ let isMuted = false;
 let lastPlayAttempt = 0;
 let lastPlayButtonClick = 0;
 let isStopping = false;
+let stationDisplayMode = 'custom-only'; // New variable to track display mode
 
 const failedFaviconCache = new Set();
 
 const keepAliveAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
 keepAliveAudio.loop = true;
 keepAliveAudio.volume = 0;
+
+// Developer-only function to set station display mode
+window.setStationDisplayMode = function(mode) {
+    const validModes = ['both', 'custom-only', 'api-only'];
+    if (!validModes.includes(mode)) {
+        console.error(`Invalid station display mode: ${mode}. Valid modes are: ${validModes.join(', ')}`);
+        throw new Error('Invalid station display mode');
+    }
+    stationDisplayMode = mode;
+    console.log(`Station display mode set to: ${mode}`);
+    
+    // Re-fetch and display stations for the current country if one is selected
+    if (lastSelectedCountry) {
+        console.log(`Refreshing stations for country ${lastSelectedCountry} with mode ${mode}`);
+        fetchAndDisplayAllStations(lastSelectedCountry).catch(err => {
+            console.error('Failed to refresh stations after mode change:', err.message);
+            showError('Couldn’t refresh stations.\nPlease try again!');
+        });
+    }
+};
 
 function initializeAudioElement() {
     if (audio) {
@@ -544,17 +565,31 @@ function mergeDuplicateStations(stations) {
 }
 
 async function fetchAndDisplayAllStations(countryCode) {
-    console.log('Fetching stations for country:', countryCode);
+    console.log('Fetching stations for country:', countryCode, 'with display mode:', stationDisplayMode);
     showLoading(true);
     try {
         const cacheKey = `${CACHE_KEY}_${countryCode}`;
         let allStations = null;
 
-        if (countryCode.toUpperCase() === 'IN') {
+        // Handle station fetching based on stationDisplayMode
+        if (countryCode.toUpperCase() === 'IN' && stationDisplayMode !== 'api-only') {
+            // For India, use custom stations if mode is 'both' or 'custom-only'
             console.log('Using custom stations for India, sorting by votes');
+            allStations = [...CUSTOM_INDIAN_STATIONS].sort((a, b) => (b.votes || 0) - (a.votes || 0));
+            if (stationDisplayMode === 'both') {
+                // Fetch API stations and combine with custom stations
+                console.log('Fetching additional API stations for India (both mode)...');
+                const apiStations = await fetchFromFastestServer(`/json/stations/bycountrycodeexact/${countryCode}?hidebroken=true&order=votes&reverse=true`);
+                allStations = [...allStations, ...(apiStations || [])];
+            }
+            localStorage.setItem(cacheKey, JSON.stringify({ data: allStations, timestamp: Date.now() }));
+        } else if (stationDisplayMode === 'custom-only' && countryCode.toUpperCase() === 'IN') {
+            // Only custom stations for India
+            console.log('Using only custom stations for India (custom-only mode)');
             allStations = [...CUSTOM_INDIAN_STATIONS].sort((a, b) => (b.votes || 0) - (a.votes || 0));
             localStorage.setItem(cacheKey, JSON.stringify({ data: allStations, timestamp: Date.now() }));
         } else {
+            // Use API stations for non-India or api-only mode
             const cachedData = localStorage.getItem(cacheKey);
             if (cachedData) {
                 const { data, timestamp } = JSON.parse(cachedData);
@@ -588,7 +623,7 @@ async function fetchAndDisplayAllStations(countryCode) {
     } catch (error) {
         console.error('Failed to fetch/display stations:', error.message);
         stationsFailedToLoad = true;
-        if (countryCode.toUpperCase() === 'IN') {
+        if (countryCode.toUpperCase() === 'IN' && stationDisplayMode !== 'api-only') {
             console.log('Using custom stations for IN due to API failure');
             countryStations = mergeDuplicateStations([...CUSTOM_INDIAN_STATIONS].sort((a, b) => (b.votes || 0) - (a.votes || 0)));
             selectedLanguage = '';
