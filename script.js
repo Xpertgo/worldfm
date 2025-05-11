@@ -70,6 +70,7 @@ window.setStationDisplayMode = function(mode) {
     }
     stationDisplayMode = mode;
     console.log(`Station display mode set to: ${mode}`);
+    
     if (lastSelectedCountry) {
         console.log(`Refreshing stations for country ${lastSelectedCountry} with mode ${mode}`);
         fetchAndDisplayAllStations(lastSelectedCountry).catch(err => {
@@ -100,6 +101,74 @@ function initializeAudioElement() {
 
 initializeAudioElement();
 
+async function requestNotificationPermission() {
+    if (!("Notification" in window)) {
+        console.warn("Notifications API not supported in this browser.");
+        return false;
+    }
+
+    const permission = await Notification.requestPermission();
+    console.log("Notification permission status:", permission);
+    return permission === "granted";
+}
+
+function showCustomNotification(title, options = {}) {
+    if (!("Notification" in window) || Notification.permission !== "granted") {
+        console.warn("Cannot show notification: API not supported or permission denied.");
+        return;
+    }
+
+    const defaultOptions = {
+        body: "World FM Radio",
+        icon: currentStation?.favicon || "/apple-touch-icon.png",
+        badge: "/apple-touch-icon.png",
+        silent: false,
+        tag: "world-fm-radio",
+        renotify: true,
+        vibrate: [200, 100, 200],
+        actions: [
+            {
+                action: "play-pause",
+                title: isPlaying ? "Pause" : "Play",
+                icon: isPlaying ? "/pause-icon.png" : "/play-icon.png",
+            },
+        ],
+    };
+
+    const notificationOptions = { ...defaultOptions, ...options };
+
+    try {
+        const notification = new Notification(title, notificationOptions);
+        
+        notification.onclick = () => {
+            window.focus();
+            if (currentStation && !isPlaying && !isOffline) {
+                playStation(currentStation);
+            }
+            console.log("Notification clicked, window focused");
+        };
+
+        notification.onactionclick = (event) => {
+            if (event.action === "play-pause") {
+                if (isPlaying) {
+                    audio.pause();
+                    isPlaying = false;
+                    isManuallyPaused = true;
+                    updatePlayerDisplay();
+                    updateMediaSession();
+                } else if (currentStation) {
+                    playStation(currentStation);
+                }
+            }
+            console.log("Notification action clicked:", event.action);
+        };
+
+        console.log("Notification shown:", title, notificationOptions);
+    } catch (err) {
+        console.error("Failed to show notification:", err.message);
+    }
+}
+
 function handleUserInteraction() {
     if (!userInteracted) {
         userInteracted = true;
@@ -107,6 +176,11 @@ function handleUserInteraction() {
         audioContext.resume().then(() => {
             console.log('Audio context resumed');
             keepAliveAudio.play().catch(err => console.warn('Keep-alive audio failed to start:', err));
+            requestNotificationPermission().then(hasPermission => {
+                if (!hasPermission) {
+                    console.warn("Notifications disabled; user denied permission.");
+                }
+            });
         }).catch(err => console.error('Failed to resume audio context:', err));
     }
 }
@@ -179,15 +253,15 @@ function updateStationVisuals(station = null, forceReset = false) {
 }
 
 function getAudioErrorMessage(error) {
-    if (!error) return 'Oops! Something went wrong with the music.';
+    if (!error) return "Oops! Something went wrong with the music.";
     const audioError = error.target?.error;
-    if (!audioError) return 'The music stopped for an unexpected reason.';
+    if (!audioError) return "The music stopped for an unexpected reason.";
     switch (audioError.code) {
-        case MediaError.MEDIA_ERR_ABORTED: return 'The music was interrupted.';
-        case MediaError.MEDIA_ERR_NETWORK: return 'Looks like your internet dropped.';
-        case MediaError.MEDIA_ERR_DECODE: return 'This station’s sound isn’t working right now.';
-        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: return 'This station isn’t supported by your device.';
-        default: return 'Something’s up with the music.';
+        case MediaError.MEDIA_ERR_ABORTED: return "The music was interrupted.";
+        case MediaError.MEDIA_ERR_NETWORK: return "Looks like your internet dropped.";
+        case MediaError.MEDIA_ERR_DECODE: return "This station’s sound isn’t working right now.";
+        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: return "This station isn’t supported by your device.";
+        default: return "Something’s up with the music.";
     }
 }
 
@@ -198,14 +272,20 @@ audio.addEventListener('suspend', () => {
         audioContext.resume().then(() => {
             audio.play().catch(err => {
                 console.error('Failed to resume audio on suspend:', err);
-                showError('The music paused unexpectedly.\nPlease press play to resume.');
-                updateMediaSession();
+                showError("The music paused unexpectedly.\nPlease press play to resume.");
+                showCustomNotification("Playback Suspended", {
+                    body: "The music paused unexpectedly. Press play to resume.",
+                });
             });
         }).catch(err => {
             console.error('Failed to resume audio context on suspend:', err);
-            showError('The music paused unexpectedly.\nPlease press play to resume.');
-            updateMediaSession();
+            showError("The music paused unexpectedly.\nPlease press play to resume.");
+            showCustomNotification("Playback Suspended", {
+                body: "The music paused unexpectedly. Press play to resume.",
+            });
         });
+    } else {
+        console.log('No resume needed: audio not playing or manually paused');
     }
 });
 
@@ -231,7 +311,10 @@ audio.addEventListener('pause', () => {
     updatePlayerDisplay();
     updateMediaSession();
     if (isManuallyPaused) {
-        showError('Paused! Click play to resume');
+        showError("Paused! Click play to resume");
+        showCustomNotification("Paused", {
+            body: `Station: ${currentStation?.name || "Unknown"}`,
+        });
     }
     console.log('Audio paused', { manual: isManuallyPaused });
     updateFavoriteItemButtons();
@@ -249,7 +332,9 @@ audio.addEventListener('error', (e) => {
     isPlaying = false;
     if (isOffline) {
         showError('You are offline!\nPlease check your internet connection.');
-        updateMediaSession();
+        showCustomNotification("Offline", {
+            body: "You are offline! Please check your internet connection.",
+        });
         return;
     }
     const errorMessage = getAudioErrorMessage(e);
@@ -257,13 +342,18 @@ audio.addEventListener('error', (e) => {
         audioErrorRetryCount++;
         console.warn(`Retrying ${currentStation.name} due to error (attempt ${audioErrorRetryCount}/${MAX_AUDIO_ERROR_RETRIES})`);
         showError(`${errorMessage} Retrying ${currentStation.name}... (attempt ${audioErrorRetryCount})`);
+        showCustomNotification("Retrying Station", {
+            body: `${errorMessage} Retrying ${currentStation.name}... (attempt ${audioErrorRetryCount})`,
+        });
         setTimeout(() => playStation(currentStation), AUDIO_ERROR_RETRY_DELAY);
     } else {
         console.error(`${currentStation?.name || 'Station'} failed after ${MAX_AUDIO_ERROR_RETRIES} retries`);
         showError(`${errorMessage}\nPlease try another station.`);
+        showCustomNotification("Playback Failed", {
+            body: `${errorMessage}\nPlease try another station.`,
+        });
         audioErrorRetryCount = 0;
         updatePlayerDisplay();
-        updateMediaSession();
         showLoading(false);
     }
 });
@@ -276,16 +366,20 @@ document.addEventListener('visibilitychange', () => {
         console.log('App minimized or screen off, ensuring audio continues...');
         audioContext.resume().then(() => audio.play()).catch(err => {
             console.error('Failed to keep audio playing in background:', err);
-            showError('The music stopped when the screen turned off.\nPlease tap play to resume!');
-            updateMediaSession();
+            showError("The music stopped when the screen turned off.\nPlease tap play to resume!");
+            showCustomNotification("Playback Interrupted", {
+                body: "The music stopped when the screen turned off. Tap play to resume!",
+            });
         });
         keepAliveAudio.play().catch(err => console.warn('Keep-alive failed in background:', err));
     } else if (document.visibilityState === 'visible' && !isPlaying && currentStation && !isOffline && !isManuallyPaused) {
         console.log('App restored, resuming audio...');
         audioContext.resume().then(() => audio.play()).catch(err => {
             console.error('Failed to resume audio on visibility restore:', err);
-            showError('The music didn’t restart.\nPlease tap play to bring it back!');
-            updateMediaSession();
+            showError("The music didn’t restart.\nPlease tap play to bring it back!");
+            showCustomNotification("Playback Not Resumed", {
+                body: "The music didn’t restart. Tap play to bring it back!",
+            });
         });
     }
 });
@@ -296,7 +390,9 @@ async function requestWakeLock() {
         try {
             wakeLock = await navigator.wakeLock.request('screen');
             console.log('Wake lock acquired');
-            wakeLock.addEventListener('release', () => console.log('Wake lock released'));
+            wakeLock.addEventListener('release', () => {
+                console.log('Wake lock released');
+            });
         } catch (err) {
             console.error('Failed to acquire wake lock:', err);
         }
@@ -326,10 +422,12 @@ function startSilenceDetection() {
             console.log('Audio level check:', { average });
             if (average < 1) {
                 console.warn('Silence detected in audio output');
-                showError('No sound detected from this station.\nPlease select another station.');
+                showError("No sound detected from this station.\nPlease select another station.");
+                showCustomNotification("No Sound Detected", {
+                    body: "No sound detected from this station. Please select another station.",
+                });
                 audio.pause();
                 audioErrorRetryCount = 0;
-                updateMediaSession();
             }
         }
     }, SILENCE_DETECTION_INTERVAL);
@@ -345,103 +443,112 @@ function stopSilenceDetection() {
 }
 
 function updateMediaSession() {
-    if (!('mediaSession' in navigator)) {
-        console.log('MediaSession API not supported in this browser');
+    if (!("mediaSession" in navigator)) {
+        console.warn("Media Session API not supported in this browser.");
         return;
     }
 
-    const playbackState = isOffline || hasError || !currentStation
-        ? 'none'
-        : isPlaying && !isManuallyPaused
-        ? 'playing'
-        : 'paused';
-
-    console.log('Updating MediaSession', {
+    console.log("Updating media session", {
         station: currentStation?.name,
         isPlaying,
-        isManuallyPaused,
         isOffline,
-        hasError,
-        playbackState
+        isMuted,
     });
 
-    navigator.mediaSession.metadata = currentStation ? new MediaMetadata({
-        title: currentStation.name,
-        artist: 'World FM Radio',
-        album: 'Live Stream',
+    navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentStation ? currentStation.name : "World FM Radio",
+        artist: normalizeLanguage(currentStation?.language) || "Unknown",
+        album: currentStation?.country || "World FM Radio",
         artwork: [
-            { src: currentStation.favicon || 'https://via.placeholder.com/96x96', sizes: '96x96', type: 'image/png' },
-            { src: currentStation.favicon || 'https://via.placeholder.com/128x128', sizes: '128x128', type: 'image/png' }
-        ]
-    }) : null;
-
-    navigator.mediaSession.playbackState = playbackState;
-
-    ['play', 'pause', 'stop', 'previoustrack', 'nexttrack'].forEach(action => {
-        navigator.mediaSession.setActionHandler(action, null);
+            {
+                src: currentStation?.favicon || "/apple-touch-icon.png",
+                sizes: "96x96",
+                type: "image/png",
+            },
+            {
+                src: currentStation?.favicon || "/apple-touch-icon.png",
+                sizes: "128x128",
+                type: "image/png",
+            },
+            {
+                src: currentStation?.favicon || "/apple-touch-icon.png",
+                sizes: "192x192",
+                type: "image/png",
+            },
+            {
+                src: currentStation?.favicon || "/apple-touch-icon.png",
+                sizes: "512x512",
+                type: "image/png",
+            },
+        ],
     });
 
-    if (currentStation && !isOffline && !hasError) {
-        navigator.mediaSession.setActionHandler('play', async () => {
-            console.log('MediaSession: Play action triggered', { isPlaying, isManuallyPaused, audioPaused: audio.paused });
-            if (isPlaying && !isManuallyPaused && !audio.paused) {
-                console.log('Already playing, ignoring play action');
-                return;
-            }
-            try {
-                await audioContext.resume();
-                if (!audio.src || audio.src !== (currentStation.url_resolved || currentStation.url)) {
-                    audio.src = currentStation.url_resolved || currentStation.url;
-                }
-                await audio.play();
-                isPlaying = true;
-                isManuallyPaused = false;
-                hasError = false;
-                clearError();
-                startHeartbeat();
-                startSilenceDetection();
-                requestWakeLock();
-                keepAliveAudio.play().catch(err => console.warn('Keep-alive failed on play:', err));
-                updatePlayerDisplay();
-                updateMediaSession();
-                console.log('MediaSession play successful', { station: currentStation.name });
-            } catch (err) {
-                console.error('MediaSession play failed:', err.message);
-                hasError = true;
-                isPlaying = false;
-                showError(`Couldn’t play ${currentStation.name}.\nTry another station!`);
-                updatePlayerDisplay();
-                updateMediaSession();
-            }
-        });
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
 
-        navigator.mediaSession.setActionHandler('pause', () => {
-            console.log('MediaSession: Pause action triggered', { isPlaying, isManuallyPaused, audioPaused: audio.paused });
-            if (!isPlaying || isManuallyPaused || audio.paused) {
-                console.log('Already paused, ignoring pause action');
-                return;
-            }
-            audio.pause();
-            isPlaying = false;
-            isManuallyPaused = true;
-            stopHeartbeat();
-            stopSilenceDetection();
-            releaseWakeLock();
-            showError('Paused! Click play to resume');
+    navigator.mediaSession.setActionHandler("play", async () => {
+        if (!currentStation || isOffline) {
+            console.warn("Cannot play: no station or offline.");
+            showCustomNotification("Cannot Play", {
+                body: isOffline ? "You are offline!" : "No station selected.",
+            });
+            return;
+        }
+        console.log("Media session: Play triggered");
+        handleUserInteraction();
+        try {
+            await audioContext.resume();
+            await audio.play();
+            isPlaying = true;
+            isManuallyPaused = false;
             updatePlayerDisplay();
-            updateMediaSession();
-            console.log('MediaSession pause successful', { station: currentStation.name });
-        });
-
-        navigator.mediaSession.setActionHandler('stop', stopPlayback);
-        navigator.mediaSession.setActionHandler('previoustrack', previousStation);
-        navigator.mediaSession.setActionHandler('nexttrack', nextStation);
-    }
-
-    console.log('MediaSession updated', {
-        playbackState: navigator.mediaSession.playbackState,
-        hasMetadata: !!navigator.mediaSession.metadata
+            startHeartbeat();
+            startSilenceDetection();
+            requestWakeLock();
+            keepAliveAudio.play().catch(err => console.warn("Keep-alive failed on play:", err));
+            showCustomNotification(`Now Playing: ${currentStation.name}`, {
+                body: `Resumed playback.`,
+            });
+        } catch (err) {
+            console.error("Media session play failed:", err.message);
+            showCustomNotification("Playback Failed", {
+                body: "Couldn’t start the music. Try another station.",
+            });
+        }
     });
+
+    navigator.mediaSession.setActionHandler("pause", () => {
+        console.log("Media session: Pause triggered");
+        audio.pause();
+        isPlaying = false;
+        isManuallyPaused = true;
+        stopHeartbeat();
+        stopSilenceDetection();
+        releaseWakeLock();
+        updatePlayerDisplay();
+        showCustomNotification("Paused", {
+            body: `Station: ${currentStation?.name || "Unknown"}`,
+        });
+    });
+
+    navigator.mediaSession.setActionHandler("stop", () => {
+        console.log("Media session: Stop triggered");
+        stopPlayback();
+    });
+
+    navigator.mediaSession.setActionHandler("previoustrack", () => {
+        console.log("Media session: Previous track triggered");
+        handleUserInteraction();
+        previousStation();
+    });
+
+    navigator.mediaSession.setActionHandler("nexttrack", () => {
+        console.log("Media session: Next track triggered");
+        handleUserInteraction();
+        nextStation();
+    });
+
+    navigator.mediaSession.setActionHandler("seekbackward", null);
+    navigator.mediaSession.setActionHandler("seekforward", null);
 }
 
 async function fetchFromFastestServer(endpoint, retryCount = 0) {
@@ -494,7 +601,7 @@ async function initializeApp(retryCount = 0) {
     userInteracted = false;
     console.log('Initializing app...', { retryCount, userInteracted });
 
-    const requiredElements = ['countrySelect', 'volumeLevel', 'errorContainer', 'loading', 'stationImage', 'stationIcon', 'stationSearch', 'clearSearchBtn', 'mainContent', 'favoritesContent', 'favoritesList', 'muteBtn', 'aboutContent'];
+    const requiredElements = ['countrySelect', 'volumeLevel', 'errorContainer', 'loading', 'stationImage', 'stationIcon', 'stationSearch', 'clearSearchBtn', 'mainContent', 'favoritesContent', 'favoritesList', 'muteBtn', 'aboutContent', 'enableNotificationsBtn'];
     if (!requiredElements.every(id => document.getElementById(id))) {
         console.error('Required DOM elements missing:', requiredElements.filter(id => !document.getElementById(id)));
         if (retryCount < 3) {
@@ -503,6 +610,9 @@ async function initializeApp(retryCount = 0) {
             return;
         }
         showError('The app couldn’t load properly.\nPlease refresh the page.');
+        showCustomNotification("App Load Failed", {
+            body: "The app couldn’t load properly. Please refresh the page.",
+        });
         return;
     }
 
@@ -565,7 +675,11 @@ async function initializeApp(retryCount = 0) {
                     currentStation = station;
                     updateStationVisuals(station);
                     updatePlayerDisplay();
+                    console.log('Showing restore message for station:', station.name);
                     showError(`Your last station, ${station.name}, is ready!\nTap play to listen.`);
+                    showCustomNotification("Last Station Ready", {
+                        body: `Your last station, ${station.name}, is ready! Tap play to listen.`,
+                    });
                 } else {
                     console.warn('Last station not found in countryStations, clearing lastStation');
                     localStorage.removeItem('lastStation');
@@ -590,12 +704,13 @@ async function initializeApp(retryCount = 0) {
             homeLink.classList.add('active');
             console.log('Set HOME as active on first load');
         }
-        updateMediaSession();
     } catch (error) {
         console.error('Initialization failed:', error.message);
         stationsFailedToLoad = true;
         showError(isOffline ? 'You are offline!\nPlease check your internet connection.' : 'Failed to initialize app.\nPlease check your connection and refresh!');
-        updateMediaSession();
+        showCustomNotification("Initialization Failed", {
+            body: isOffline ? "You are offline! Please check your internet connection." : "Failed to initialize app. Please check your connection and refresh!",
+        });
     } finally {
         showLoading(false);
     }
@@ -667,7 +782,6 @@ async function fetchAndDisplayAllStations(countryCode) {
         renderStationList();
         renderFavoritesList();
         updateSearchVisibility();
-        updateMediaSession();
     } catch (error) {
         console.error('Failed to fetch/display stations:', error.message);
         stationsFailedToLoad = true;
@@ -687,13 +801,15 @@ async function fetchAndDisplayAllStations(countryCode) {
             }));
         } else {
             showError('No stations loaded.\nPlease try another country or check your connection.');
+            showCustomNotification("No Stations Loaded", {
+                body: "No stations loaded. Please try another country or check your connection.",
+            });
             stations = [];
             renderStationList();
             renderFavoritesList();
             populateLanguageDropdown();
         }
         updateSearchVisibility();
-        updateMediaSession();
     } finally {
         showLoading(false);
     }
@@ -737,7 +853,9 @@ function handleCountryChange(e) {
             console.error('Country change failed:', err.message);
             stationsFailedToLoad = true;
             showError(isOffline ? 'You are offline!\nPlease check your internet connection.' : 'Couldn’t load stations.\nTry another country!');
-            updateMediaSession();
+            showCustomNotification("Failed to Load Stations", {
+                body: isOffline ? "You are offline! Please check your internet connection." : "Couldn’t load stations. Try another country!",
+            });
         });
     } else {
         clearError();
@@ -750,7 +868,6 @@ function handleCountryChange(e) {
         document.getElementById('stationSelect').innerHTML = '<option value="">Select Station</option>';
         document.getElementById('stationSelect').disabled = true;
         console.log('Country reset, clearing language and station options');
-        updateMediaSession();
     }
 }
 
@@ -817,7 +934,6 @@ function handleLanguageChange(e) {
     updateSearchVisibility();
     filterStationsByLanguage(selectedLanguage);
     renderStationList(true);
-    updateMediaSession();
 }
 
 function filterStationsByLanguage(language) {
@@ -862,9 +978,15 @@ function toggleFavorite(station) {
     if (isNowFavorite) {
         favorites.push(station);
         console.log(`Added ${station.name} to favorites`);
+        showCustomNotification("Added to Favorites", {
+            body: `${station.name} has been added to your favorites.`,
+        });
     } else {
         favorites = favorites.filter(f => f.url !== station.url);
         console.log(`Removed ${station.name} from favorites`);
+        showCustomNotification("Removed from Favorites", {
+            body: `${station.name} has been removed from your favorites.`,
+        });
     }
     saveFavorites(favorites);
 
@@ -890,659 +1012,424 @@ function toggleFavorite(station) {
             favOption.textContent = `★ ${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
             favOption.classList.add('favorited');
             favOption.setAttribute('aria-label', `Favorite: ${station.name}`);
-            if (station.votes > 100) favOption.classList.add('high-votes');
-            else if (station.votes < 10) favOption.classList.add('low-votes');
-            else favOption.classList.add('medium-votes');
             favGroup.appendChild(favOption);
-            console.log(`Added ${station.name} to Favorites optgroup`);
-        } else if (favGroup) {
-            const favOption = favGroup.querySelector(`option[value="fav-${index}"]`);
+            console.log(`Added favorite option for ${station.name}`);
+        } else {
+            const favOption = stationSelect.querySelector(`option[value="fav-${index}"]`);
             if (favOption) {
                 favOption.remove();
-                console.log(`Removed ${station.name} from Favorites optgroup`);
+                console.log(`Removed favorite option for ${station.name}`);
             }
-            if (favGroup.childElementCount === 0) {
+            if (favGroup && !favGroup.hasChildNodes()) {
                 favGroup.remove();
                 console.log('Removed empty Favorites optgroup');
             }
         }
+    }
 
-        if (station.url === currentStation?.url) {
-            const selectValue = selectedFromFavorites && isNowFavorite ? `fav-${index}` : `main-${index}`;
-            stationSelect.value = selectValue;
-            console.log(`Selected current station: ${station.name}`, { selectValue, selectedFromFavorites });
-        }
+    if (stationSelect.value === `fav-${index}` && !isNowFavorite) {
+        console.log(`Favorite option for ${station.name} was selected but removed, switching to main-${index}`);
+        stationSelect.value = `main-${index}`;
     }
 
     updateFavoriteButton();
-    updatePlayerDisplay();
     renderFavoritesList();
 }
 
 function updateFavoriteButton() {
     const favoriteBtn = document.getElementById('favoriteBtn');
-    if (currentStation) {
-        favoriteBtn.disabled = false;
-        favoriteBtn.classList.toggle('favorited', isFavorite(currentStation));
-    } else {
-        favoriteBtn.disabled = true;
-        favoriteBtn.classList.remove('favorited');
-    }
-}
-
-function renderStationList(isLanguageChange = false) {
-    const stationSelect = document.getElementById('stationSelect');
-    stationSelect.innerHTML = '<option value="">Select Station</option>';
-    const favorites = getFavorites();
-
-    const favGroup = document.createElement('optgroup');
-    favGroup.label = 'Favorites';
-    const mainGroup = document.createElement('optgroup');
-    mainGroup.label = 'Main';
-
-    if (favorites.length > 0) {
-        stationSelect.appendChild(favGroup);
-    }
-    if (stations.length > 0) {
-        stationSelect.appendChild(mainGroup);
-    }
-
-    let index = 0;
-    const start = performance.now();
-    const renderBatch = () => {
-        const mainFragment = document.createDocumentFragment();
-        const favFragment = document.createDocumentFragment();
-        const end = Math.min(index + BATCH_SIZE, stations.length);
-
-        for (; index < end; index++) {
-            const station = stations[index];
-            const isFav = isFavorite(station);
-            console.log('Rendering station:', { name: station.name, isFavorite: isFav });
-
-            const mainOption = document.createElement('option');
-            mainOption.value = `main-${index}`;
-            mainOption.textContent = `${isFav ? '★ ' : ''}${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
-            mainOption.classList.toggle('favorited', isFav);
-            mainOption.setAttribute('aria-label', isFav ? `Favorite: ${station.name}` : station.name);
-            if (station.votes > 100) mainOption.classList.add('high-votes');
-            else if (station.votes < 10) mainOption.classList.add('low-votes');
-            else mainOption.classList.add('medium-votes');
-            mainFragment.appendChild(mainOption);
-
-            if (isFav) {
-                const favOption = document.createElement('option');
-                favOption.value = `fav-${index}`;
-                favOption.textContent = `★ ${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
-                favOption.classList.add('favorited');
-                favOption.setAttribute('aria-label', `Favorite: ${station.name}`);
-                if (station.votes > 100) favOption.classList.add('high-votes');
-                else if (station.votes < 10) favOption.classList.add('low-votes');
-                else favOption.classList.add('medium-votes');
-                favFragment.appendChild(favOption);
-            }
-        }
-
-        mainGroup.appendChild(mainFragment);
-        favGroup.appendChild(favFragment);
-
-        if (index < stations.length) {
-            requestAnimationFrame(renderBatch);
-        } else {
-            stationSelect.disabled = false;
-            console.log(`Station list rendered: ${stations.length} stations in ${performance.now() - start}ms`);
-            showLoading(false);
-            updateFavoriteButton();
-            if (!isLanguageChange && currentStation) {
-                const currentIndex = stations.findIndex(s => s.url === currentStation.url);
-                if (currentIndex >= 0) {
-                    const selectValue = selectedFromFavorites && isFavorite(currentStation) ? `fav-${currentIndex}` : `main-${currentIndex}`;
-                    stationSelect.value = selectValue;
-                    console.log(`Restored current station selection: ${currentStation.name}`, { currentIndex, selectValue, selectedFromFavorites });
-                }
-            }
-            updateSearchVisibility();
-            updateMediaSession();
-        }
-    };
-
-    console.log('Starting station list render...', { isLanguageChange });
-    requestAnimationFrame(renderBatch);
-}
-
-function moveFavorite(index, direction) {
-    const favorites = getFavorites();
-    if (!favorites || favorites.length < 2) {
-        console.log('Not enough favorites to reorder');
+    if (!favoriteBtn) {
+        console.error('Favorite button not found');
         return;
     }
-
-    const newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= favorites.length) {
-        console.log('Cannot move favorite beyond list bounds:', { index, direction });
-        return;
-    }
-
-    [favorites[index], favorites[newIndex]] = [favorites[newIndex], favorites[index]];
-    console.log(`Moved favorite from index ${index} to ${newIndex}`);
-
-    saveFavorites(favorites);
-    renderFavoritesList();
-    renderStationList();
+    favoriteBtn.classList.toggle('favorited', currentStation && isFavorite(currentStation));
+    favoriteBtn.disabled = !currentStation;
+    favoriteBtn.setAttribute('aria-label', currentStation && isFavorite(currentStation) ? 'Remove from Favorites' : 'Add to Favorites');
+    console.log('Favorite button updated', { isFavorited: currentStation && isFavorite(currentStation), station: currentStation?.name });
 }
 
 function renderFavoritesList() {
     const favoritesList = document.getElementById('favoritesList');
+    if (!favoritesList) {
+        console.error('Favorites list element not found');
+        return;
+    }
     const favorites = getFavorites();
-
     favoritesList.innerHTML = '';
+
     if (favorites.length === 0) {
         favoritesList.innerHTML = '<p class="no-favorites">No favorite stations yet.</p>';
         console.log('No favorites to display');
         return;
     }
 
-    const fragment = document.createDocumentFragment();
     favorites.forEach((station, index) => {
         const favoriteItem = document.createElement('div');
-        favoriteItem.className = 'favorite-item';
+        favoriteItem.classList.add('favorite-item');
+        favoriteItem.setAttribute('data-url', station.url);
 
         const stationName = document.createElement('span');
         stationName.textContent = station.name;
-        stationName.setAttribute('aria-label', `Play ${station.name}`);
+        stationName.setAttribute('aria-label', `Select ${station.name}`);
         stationName.addEventListener('click', () => {
-            console.log('Playing favorite station:', station.name);
+            console.log(`Favorite station clicked: ${station.name}`);
+            handleUserInteraction();
             selectedFromFavorites = true;
-            playStation(station);
-            const stationIndex = stations.findIndex(s => s.url === station.url);
-            if (stationIndex >= 0) {
-                document.getElementById('stationSelect').value = `fav-${stationIndex}`;
+            const stationSelect = document.getElementById('stationSelect');
+            const optionIndex = stations.findIndex(s => s.url === station.url);
+            if (optionIndex >= 0) {
+                stationSelect.value = `fav-${optionIndex}`;
+                playStation(stations[optionIndex]);
+            } else {
+                console.warn(`Favorite station ${station.name} not found in current stations`);
+                showError(`Station ${station.name} is not available in the current country.\nPlease select another country.`);
+                showCustomNotification("Station Not Available", {
+                    body: `Station ${station.name} is not available in the current country. Please select another country.`,
+                });
             }
         });
 
-        const actions = document.createElement('div');
-        actions.className = 'favorite-actions';
-
-        const upBtn = document.createElement('button');
-        upBtn.className = 'move-btn up-btn';
-        upBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
-        upBtn.setAttribute('aria-label', `Move ${station.name} up`);
-        upBtn.disabled = index === 0;
-        upBtn.addEventListener('click', () => moveFavorite(index, -1));
-
-        const downBtn = document.createElement('button');
-        downBtn.className = 'move-btn down-btn';
-        downBtn.innerHTML = '<i class="fas fa-arrow-down"></i>';
-        downBtn.setAttribute('aria-label', `Move ${station.name} down`);
-        downBtn.disabled = index === favorites.length - 1;
-        downBtn.addEventListener('click', () => moveFavorite(index, 1));
+        const actionsDiv = document.createElement('div');
+        actionsDiv.classList.add('favorite-actions');
 
         const playBtn = document.createElement('button');
-        playBtn.className = 'play-btn';
-        playBtn.innerHTML = (currentStation && station.url === currentStation.url && isPlaying)
-            ? '<i class="fas fa-pause"></i>'
-            : '<i class="fas fa-play"></i>';
-        playBtn.setAttribute('aria-label',
-            (currentStation && station.url === currentStation.url && isPlaying)
-                ? `Pause ${station.name}`
-                : `Play ${station.name}`
-        );
+        playBtn.classList.add('play-btn');
+        playBtn.innerHTML = `<i class="fas ${currentStation?.url === station.url && isPlaying ? 'fa-pause' : 'fa-play'}"></i>`;
+        playBtn.setAttribute('aria-label', currentStation?.url === station.url && isPlaying ? `Pause ${station.name}` : `Play ${station.name}`);
         playBtn.addEventListener('click', () => {
-            const now = Date.now();
-            if (now - lastPlayButtonClick < PLAY_BUTTON_DEBOUNCE) {
-                console.warn('Play button click debounced: too frequent');
-                return;
-            }
-            lastPlayButtonClick = now;
-
+            console.log(`Play button clicked for favorite: ${station.name}`);
             handleUserInteraction();
-
-            if (currentStation && station.url === currentStation.url && isPlaying) {
-                console.log('Pausing current station from favorites list:', station.name);
+            if (currentStation?.url === station.url && isPlaying) {
+                audio.pause();
                 isPlaying = false;
                 isManuallyPaused = true;
-                audio.pause();
-                stopHeartbeat();
-                stopSilenceDetection();
-                releaseWakeLock();
                 updatePlayerDisplay();
                 updateMediaSession();
-                showError('Paused! Click play to resume');
+                showCustomNotification("Paused", {
+                    body: `Station: ${station.name}`,
+                });
             } else {
-                console.log('Playing favorite station:', station.name);
                 selectedFromFavorites = true;
-                playStation(station);
-                const stationIndex = stations.findIndex(s => s.url === station.url);
-                if (stationIndex >= 0) {
-                    document.getElementById('stationSelect').value = `fav-${stationIndex}`;
+                const stationSelect = document.getElementById('stationSelect');
+                const optionIndex = stations.findIndex(s => s.url === station.url);
+                if (optionIndex >= 0) {
+                    stationSelect.value = `fav-${optionIndex}`;
+                    playStation(stations[optionIndex]);
+                } else {
+                    console.warn(`Favorite station ${station.name} not found in current stations`);
+                    showError(`Station ${station.name} is not available in the current country.\nPlease select another country.`);
+                    showCustomNotification("Station Not Available", {
+                        body: `Station ${station.name} is not available in the current country. Please select another country.`,
+                    });
                 }
             }
         });
 
         const removeBtn = document.createElement('button');
-        removeBtn.className = 'remove-btn';
+        removeBtn.classList.add('remove-btn');
         removeBtn.innerHTML = '<i class="fas fa-trash"></i>';
         removeBtn.setAttribute('aria-label', `Remove ${station.name} from favorites`);
         removeBtn.addEventListener('click', () => {
-            const confirmDelete = window.confirm(`Are you sure you want to remove ${station.name} from favorites?`);
-            if (confirmDelete) {
-                console.log('Removing favorite:', station.name);
-                toggleFavorite(station);
-            } else {
-                console.log('Favorite removal cancelled:', station.name);
-            }
+            console.log(`Removing favorite: ${station.name}`);
+            toggleFavorite(station);
         });
 
-        actions.appendChild(upBtn);
-        actions.appendChild(downBtn);
-        actions.appendChild(playBtn);
-        actions.appendChild(removeBtn);
-        favoriteItem.appendChild(stationName);
-        favoriteItem.appendChild(actions);
-        fragment.appendChild(favoriteItem);
-    });
+        const upBtn = document.createElement('button');
+        upBtn.classList.add('move-btn', 'up-btn');
+        upBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
+        upBtn.setAttribute('aria-label', `Move ${station.name} up`);
+        upBtn.disabled = index === 0;
+        upBtn.addEventListener('click', () => {
+            console.log(`Moving favorite up: ${station.name}`);
+            const newFavorites = [...favorites];
+            [newFavorites[index - 1], newFavorites[index]] = [newFavorites[index], newFavorites[index - 1]];
+            saveFavorites(newFavorites);
+            renderFavoritesList();
+        });
 
-    favoritesList.appendChild(fragment);
-    console.log('Favorites list rendered:', favorites.length, 'items');
+        const downBtn = document.createElement('button');
+        downBtn.classList.add('move-btn', 'down-btn');
+        downBtn.innerHTML = '<i class="fas fa-arrow-down"></i>';
+        downBtn.setAttribute('aria-label', `Move ${station.name} down`);
+        downBtn.disabled = index === favorites.length - 1;
+        downBtn.addEventListener('click', () => {
+            console.log(`Moving favorite down: ${station.name}`);
+            const newFavorites = [...favorites];
+            [newFavorites[index], newFavorites[index + 1]] = [newFavorites[index + 1], newFavorites[index]];
+            saveFavorites(newFavorites);
+            renderFavoritesList();
+        });
+
+        actionsDiv.append(playBtn, removeBtn, upBtn, downBtn);
+        favoriteItem.append(stationName, actionsDiv);
+        favoritesList.appendChild(favoriteItem);
+    });
+    console.log('Favorites list rendered:', { count: favorites.length });
 }
 
 function updateFavoriteItemButtons() {
-    const favoriteItems = document.querySelectorAll('.favorite-item');
+    const favoritesList = document.getElementById('favoritesList');
+    if (!favoritesList) {
+        console.error('Favorites list element not found');
+        return;
+    }
+    const favoriteItems = favoritesList.querySelectorAll('.favorite-item');
     favoriteItems.forEach(item => {
-        const stationName = item.querySelector('span').textContent;
+        const stationUrl = item.getAttribute('data-url');
         const playBtn = item.querySelector('.play-btn');
-        const station = getFavorites().find(f => f.name === stationName);
-        if (station && playBtn) {
-            const isCurrentStationPlaying = currentStation && station.url === currentStation.url && isPlaying;
-            playBtn.innerHTML = isCurrentStationPlaying
-                ? '<i class="fas fa-pause"></i>'
-                : '<i class="fas fa-play"></i>';
-            playBtn.setAttribute('aria-label',
-                isCurrentStationPlaying
-                    ? `Pause ${station.name}`
-                    : `Play ${station.name}`
-            );
-            playBtn.disabled = isOffline;
-            console.log(`Updated favorite item button for ${station.name}:`, { isPlaying: isCurrentStationPlaying });
+        if (playBtn) {
+            const isCurrentPlaying = currentStation?.url === stationUrl && isPlaying;
+            playBtn.innerHTML = `<i class="fas ${isCurrentPlaying ? 'fa-pause' : 'fa-play'}"></i>`;
+            playBtn.setAttribute('aria-label', isCurrentPlaying ? `Pause ${item.querySelector('span').textContent}` : `Play ${item.querySelector('span').textContent}`);
         }
     });
 }
 
-async function testStream(url) {
-    if (isOffline) {
-        console.warn('Offline, skipping stream test');
-        return false;
+function renderStationList(clearPrevious = false) {
+    const stationSelect = document.getElementById('stationSelect');
+    if (!stationSelect) {
+        console.error('Station select element not found');
+        return;
     }
-    console.log('Testing stream:', url);
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), TEST_STREAM_TIMEOUT);
-        const response = await fetch(url, { method: 'HEAD', signal: controller.signal });
-        clearTimeout(timeoutId);
-        const contentType = response.headers.get('Content-Type') || '';
-        const isValid = (contentType.includes('audio/mpeg') || contentType.includes('audio/mp3')) && response.ok;
-        console.log('Stream test result:', { url, isValid, contentType });
-        return isValid;
-    } catch (error) {
-        console.error('Stream test failed:', error.message);
-        return false;
+    if (clearPrevious) {
+        stationSelect.innerHTML = '<option value="">Select Station</option>';
     }
+
+    if (stations.length === 0) {
+        stationSelect.innerHTML = '<option value="">No stations available</option>';
+        stationSelect.disabled = true;
+        console.log('No stations to render');
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    const favorites = getFavorites();
+    const favGroup = document.createElement('optgroup');
+    favGroup.label = 'Favorites';
+    let hasFavorites = false;
+
+    stations.forEach((station, index) => {
+        const isFavorited = favorites.some(f => f.url === station.url);
+        let favOption = null;
+
+        if (isFavorited) {
+            favOption = document.createElement('option');
+            favOption.value = `fav-${index}`;
+            favOption.textContent = `★ ${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
+            favOption.classList.add('favorited');
+            favOption.setAttribute('aria-label', `Favorite: ${station.name}`);
+            favGroup.appendChild(favOption);
+            hasFavorites = true;
+            console.log(`Added favorite option for ${station.name}`);
+        }
+
+        const mainOption = document.createElement('option');
+        mainOption.value = `main-${index}`;
+        mainOption.textContent = `${isFavorited ? '★ ' : ''}${station.name} ${station.bitrate ? `(${station.bitrate}kbps)` : ''}`;
+        if (isFavorited) {
+            mainOption.classList.add('favorited');
+        }
+        mainOption.setAttribute('aria-label', isFavorited ? `Favorite: ${station.name}` : station.name);
+
+        // Apply vote-based classes
+        if (station.votes) {
+            let voteClass;
+            if (station.votes >= 1000) {
+                voteClass = 'high-votes';
+            } else if (station.votes <= 100) {
+                voteClass = 'low-votes';
+            } else {
+                voteClass = 'medium-votes';
+            }
+            mainOption.classList.add(voteClass);
+            if (favOption) {
+                favOption.classList.add(voteClass);
+            }
+            console.log(`Applied vote class ${voteClass} to ${station.name}`, { votes: station.votes });
+        }
+
+        fragment.appendChild(mainOption);
+    });
+
+    if (hasFavorites) {
+        fragment.insertBefore(favGroup, fragment.firstChild);
+    }
+
+    stationSelect.appendChild(fragment);
+    stationSelect.disabled = false;
+    console.log('Station list rendered:', { count: stations.length, hasFavorites });
 }
 
-async function checkAudioReady(audioElement) {
+async function testStream(url) {
+    if (SKIP_STREAM_TEST) {
+        console.log('Skipping stream test for:', url);
+        return true;
+    }
+    console.log('Testing stream:', url);
+    isChecking = true;
+    const testAudio = new Audio();
+    testAudio.src = url;
+    testAudio.preload = 'none';
+    testAudio.setAttribute('crossorigin', 'anonymous');
+
     return new Promise((resolve) => {
-        if (audioElement.readyState >= 2) {
-            console.log('Audio element ready:', { readyState: audioElement.readyState });
+        const timeout = setTimeout(() => {
+            console.warn('Stream test timed out for:', url);
+            testAudio.src = '';
+            testAudio.remove();
+            isChecking = false;
+            resolve(false);
+        }, TEST_STREAM_TIMEOUT);
+
+        testAudio.addEventListener('canplay', () => {
+            console.log('Stream test successful for:', url);
+            clearTimeout(timeout);
+            testAudio.src = '';
+            testAudio.remove();
+            isChecking = false;
             resolve(true);
-        } else {
-            console.log('Waiting for audio to be ready...', { readyState: audioElement.readyState });
-            audioElement.addEventListener('loadeddata', () => {
-                console.log('Audio data loaded:', { readyState: audioElement.readyState });
-                resolve(true);
-            }, { once: true });
-            audioElement.addEventListener('error', () => {
-                console.error('Audio failed to load data');
-                resolve(false);
-            }, { once: true });
-            setTimeout(() => {
-                console.warn('Audio readiness check timed out');
-                resolve(false);
-            }, 5000);
-        }
+        }, { once: true });
+
+        testAudio.addEventListener('error', () => {
+            console.warn('Stream test failed for:', url);
+            clearTimeout(timeout);
+            testAudio.src = '';
+            testAudio.remove();
+            isChecking = false;
+            resolve(false);
+        }, { once: true });
+
+        testAudio.load();
     });
 }
 
 async function playStation(station) {
-    if (isOffline) {
-        showError('You are offline!\nPlease check your internet connection.');
-        updateMediaSession();
-        return;
-    }
-
-    if (!station || !station.url) {
-        console.error('Invalid station or missing URL:', station);
-        showError('No valid station selected.\nPlease choose another station.');
-        updateMediaSession();
+    if (!station) {
+        console.error('No station provided to play');
+        showError('Please select a station first!');
+        showCustomNotification("No Station Selected", {
+            body: "Please select a station to play.",
+        });
         return;
     }
 
     const now = Date.now();
-    if (now - lastPlayAttempt < 500) {
-        console.warn('Station change debounced: too frequent');
+    if (now - lastPlayAttempt < 1000) {
+        console.warn('Play attempt debounced: too frequent');
         return;
     }
     lastPlayAttempt = now;
 
-    console.log('Attempting to play station:', { name: station.name, url: station.url, favicon: station.favicon });
-    clearError();
     showLoading(true);
-    hasError = false;
-    isManuallyPaused = false;
-    isPlaying = false;
+    console.log('Attempting to play station:', station.name, { url: station.url });
 
-    initializeAudioElement();
-    stopHeartbeat();
-    stopSilenceDetection();
-    currentStation = station;
-
-    updateStationVisuals(station);
-    updatePlayerDisplay();
+    if (isOffline) {
+        console.warn('Cannot play: device is offline');
+        showError('You are offline!\nPlease check your internet connection.');
+        showCustomNotification("Offline", {
+            body: "You are offline! Please check your internet connection.",
+        });
+        showLoading(false);
+        return;
+    }
 
     try {
-        if (audioContext.state === 'suspended') {
-            if (!userInteracted) {
-                throw new Error('Audio context suspended: user interaction required');
-            }
-            await audioContext.resume();
-            console.log('Audio context resumed for playback');
-        }
-
-        let url = station.url_resolved || station.url;
+        const url = station.url_resolved || station.url;
         if (!url || !/^https?:\/\//.test(url)) {
-            throw new Error('Invalid stream URL');
-        }
-        console.log('Resolved URL:', url);
-
-        if (url.endsWith('.m3u') || url.endsWith('.pls')) {
-            console.log('Fetching playlist file:', url);
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
-            try {
-                const response = await fetch(url, { signal: controller.signal });
-                clearTimeout(timeoutId);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch playlist: ${response.statusText}`);
-                }
-                const text = await response.text();
-                const lines = text.split('\n');
-                const streamUrl = lines.find(line => line.trim().startsWith('http'));
-                if (!streamUrl) {
-                    throw new Error('No valid stream URL found in playlist');
-                }
-                url = streamUrl.trim();
-                console.log('Found stream URL in playlist:', url);
-            } catch (err) {
-                console.error('Playlist fetch failed:', err.message);
-                throw new Error('Unable to process playlist file');
-            }
+            console.error('Invalid station URL:', url);
+            showError('This station’s URL isn’t valid.\nPlease try another station.');
+            showCustomNotification("Invalid Station URL", {
+                body: `This station’s URL isn’t valid. Please try another station.`,
+            });
+            showLoading(false);
+            return;
         }
 
-        if (!url || !/^https?:\/\//.test(url)) {
-            throw new Error('Station URL is invalid or empty after resolution');
+        let streamUrl = url;
+        if (url.toLowerCase().endsWith('.m3u8') && typeof Hls !== 'undefined' && Hls.isSupported()) {
+            console.log('Using HLS for m3u8 stream:', url);
+            const hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(audio);
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                console.error('HLS error:', data);
+                showError('This station’s stream failed.\nPlease try another station.');
+                showCustomNotification("Stream Failed", {
+                    body: `This station’s stream failed. Please try another station.`,
+                });
+                audio.pause();
+                isPlaying = false;
+                updatePlayerDisplay();
+                showLoading(false);
+            });
+            streamUrl = null;
+        } else {
+            audio.src = streamUrl;
         }
 
-        if (!SKIP_STREAM_TEST) {
-            const isStreamValid = await testStream(url);
-            if (!isStreamValid) {
-                throw new Error('Stream test failed: This station isn’t supported by your device.');
-            }
+        const isStreamValid = await testStream(streamUrl);
+        if (!isStreamValid) {
+            console.warn(`Stream test failed for ${station.name}`);
+            showError('This station isn’t available right now.\nPlease try another one.');
+            showCustomNotification("Station Unavailable", {
+                body: `This station isn’t available right now. Please try another one.`,
+            });
+            showLoading(false);
+            return;
         }
 
-        audio.src = url;
-        audio.crossOrigin = 'anonymous';
-        audio.volume = document.getElementById('volume') ? parseFloat(document.getElementById('volume').value) : 0.5;
-        audio.muted = isMuted;
-        console.log('Starting playback...', { url, volume: audio.volume, muted: audio.muted });
-
-        const isReady = await checkAudioReady(audio);
-        if (!isReady) {
-            throw new Error('Audio failed to load: stream not ready');
-        }
-
-        const playPromise = audio.play();
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Playback timed out')), 15000);
-        });
-
-        await Promise.race([playPromise, timeoutPromise]);
-
+        await audioContext.resume();
+        await audio.play();
         isPlaying = true;
-        hasError = false;
-        const stationIndex = stations.indexOf(station);
-        if (stationIndex >= 0) {
-            const selectValue = selectedFromFavorites && isFavorite(station) ? `fav-${stationIndex}` : `main-${stationIndex}`;
-            document.getElementById('stationSelect').value = selectValue;
-            console.log(`Set station selection: ${station.name}`, { selectValue, selectedFromFavorites });
-        }
-        clearError();
-        updatePlayerDisplay();
-        updateMediaSession();
-        requestWakeLock();
-        keepAliveAudio.play().catch(err => console.warn('Keep-alive failed on station play:', err));
+        currentStation = station;
         localStorage.setItem('lastStation', JSON.stringify(station));
-        console.log('Station playing successfully:', station.name);
+        updateStationVisuals(station);
+        updatePlayerDisplay();
+        startHeartbeat();
+        startSilenceDetection();
+        requestWakeLock();
+        keepAliveAudio.play().catch(err => console.warn('Keep-alive audio failed:', err));
+        console.log(`Playing ${station.name} successfully`);
+        showCustomNotification(`Now Playing: ${station.name}`, {
+            body: `Country: ${station.country || "Unknown"} | Language: ${normalizeLanguage(station.language) || "Unknown"}`,
+            icon: station.favicon || "/apple-touch-icon.png",
+        });
     } catch (error) {
-        console.error('Failed to play station:', error.message, { station });
-        hasError = true;
+        console.error(`Failed to play ${station.name}:`, error.message);
         isPlaying = false;
-        let errorMessage = `We couldn’t play ${station.name}.\nPlease try another station.`;
-        if (error.message.includes('Invalid stream URL')) {
-            errorMessage = `Invalid URL for ${station.name}.\nPlease select another station.`;
-        } else if (error.message.includes('Station URL is invalid or empty after resolution')) {
-            errorMessage = `Station URL is invalid or empty for ${station.name}.\nPlease try another station.`;
-        } else if (error.message.includes('playlist')) {
-            errorMessage = `Unable to load playlist for ${station.name}.\nPlease try another station.`;
-        } else if (error.message.includes('timed out')) {
-            errorMessage = `Connection to ${station.name} timed out.\nPlease try again or select another station.`;
-        } else if (error.message.includes('Stream test failed')) {
-            errorMessage = `This station isn’t supported by your device.\nPlease try another station.`;
-        } else if (error.message.includes('user interaction required')) {
-            errorMessage = `Please interact with the page (e.g., click) to play ${station.name}.`;
-        } else if (error.message.includes('stream not ready')) {
-            errorMessage = `Stream for ${station.name} failed to load.\nPlease try again or select another station.`;
-        } else if (error.message.includes('play() request was interrupted')) {
-            errorMessage = `Playback of ${station.name} was interrupted.\nPlease try again.`;
-        }
-        showError(errorMessage);
-        updateMediaSession();
+        const errorMessage = getAudioErrorMessage(error);
+        showError(`${errorMessage}\nPlease try another station.`);
+        showCustomNotification("Playback Error", {
+            body: `${errorMessage}\nPlease try another station.`,
+            icon: "/apple-touch-icon.png",
+            vibrate: [300, 100, 300],
+        });
+        updatePlayerDisplay();
     } finally {
         showLoading(false);
     }
 }
 
-function animateVolumeChange(start, end, callback) {
-    const duration = VOLUME_ANIMATION_DURATION;
-    const startTime = performance.now();
-    const volumeInput = document.getElementById('volume');
-    const volumeLevel = document.getElementById('volumeLevel');
-
-    function step() {
-        const elapsed = performance.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const easedProgress = progress;
-        const currentValue = start + (end - start) * easedProgress;
-        volumeInput.value = currentValue / 100;
-        audio.volume = isMuted ? 0 : currentValue / 100;
-        volumeLevel.textContent = `${Math.round(currentValue)}%`;
-        if (progress < 1) {
-            requestAnimationFrame(step);
-        } else {
-            callback();
-        }
-    }
-
-    volumeLevel.style.transition = `opacity ${duration}ms`;
-    volumeLevel.style.opacity = '0.5';
-    requestAnimationFrame(step);
-    setTimeout(() => {
-        volumeLevel.style.opacity = '1';
-    }, duration);
-}
-
-function toggleMute() {
-    isMuted = !isMuted;
-    const muteBtn = document.getElementById('muteBtn');
-    const volumeLevel = document.getElementById('volumeLevel');
-    const volumeInput = document.getElementById('volume');
-
-    muteBtn.innerHTML = isMuted 
-        ? '<i class="fas fa-volume-mute"></i>' 
-        : '<i class="fas fa-volume-up"></i>';
-    muteBtn.setAttribute('aria-label', isMuted ? 'Unmute' : 'Mute');
-
-    if (isMuted) {
-        previousVolume = audio.volume || 0.5;
-        animateVolumeChange(audio.volume * 100, 0, () => {
-            audio.volume = 0;
-            audio.muted = true;
-            volumeLevel.textContent = '0%';
-            volumeInput.value = 0;
-            console.log('Muted with animation', { volume: audio.volume, isMuted });
-        });
-    } else {
-        const targetVolume = previousVolume || 0.5;
-        animateVolumeChange(0, targetVolume * 100, () => {
-            audio.volume = targetVolume;
-            audio.muted = false;
-            volumeLevel.textContent = `${Math.round(targetVolume * 100)}%`;
-            volumeInput.value = targetVolume;
-            console.log('Unmuted with animation', { volume: audio.volume, isMuted });
-        });
-    }
-    updatePlayerDisplay();
-    updateMediaSession();
-}
-
-function showLoading(show) {
-    const loading = document.getElementById('loading');
-    const progressBar = document.getElementById('progressBar');
-    const player = document.querySelector('.player');
-
-    if (!loading || !progressBar || !player) {
-        console.error('Loading elements not found in DOM', {
-            loading: !!loading,
-            progressBar: !!progressBar,
-            player: !!player
-        });
-        return;
-    }
-
-    isLoading = show;
-    loading.style.display = show ? 'block' : 'none';
-    loading.setAttribute('aria-busy', show ? 'true' : 'false');
-
-    player.classList.toggle('progress-active', show);
-
-    let animationFrame = null;
-    if (window.currentLoadingAnimation) {
-        cancelAnimationFrame(window.currentLoadingAnimation);
-        window.currentLoadingAnimation = null;
-    }
-
-    const updateProgress = progress => {
-        progressBar.style.width = `${progress}%`;
-        progressBar.setAttribute('aria-valuenow', Math.round(progress));
-    };
-
-    if (show) {
-        updateProgress(0);
-        let progress = 0;
-
-        const animateProgress = () => {
-            if (!isLoading) return;
-
-            const increment = Math.random() * (90 - progress) * 0.05;
-            progress = Math.min(progress + increment, 90);
-            updateProgress(progress);
-
-            if (progress < 90 && isLoading) {
-                window.currentLoadingAnimation = requestAnimationFrame(animateProgress);
-            }
-        };
-
-        window.currentLoadingAnimation = requestAnimationFrame(animateProgress);
-    } else {
-        if (progressBar.style.width !== '100%') {
-            updateProgress(100);
-            setTimeout(() => {
-                if (!isLoading) updateProgress(0);
-            }, 300);
-        }
-    }
-
-    console.log('Loading state changed:', {
-        show,
-        progress: progressBar.style.width,
-        isLoading
-    });
-}
-
-function showError(message) {
-    const errorContainer = document.getElementById('errorContainer');
-    if (!errorContainer) {
-        console.error('Error container not found in DOM');
-        return;
-    }
-    if (!message || (lastError.message === message && !isLoading)) return;
-
-    if (errorDebounceTimeout) clearTimeout(errorDebounceTimeout);
-    errorDebounceTimeout = setTimeout(() => {
-        errorContainer.innerHTML = '';
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'error-container';
-        const errorMessage = document.createElement('div');
-        errorMessage.className = 'error';
-        errorMessage.textContent = message;
-        errorDiv.appendChild(errorMessage);
-        errorContainer.appendChild(errorDiv);
-        lastError = { message };
-        hasError = true;
-        console.log('Error displayed:', message);
-        updatePlayerDisplay();
-        updateMediaSession();
-    }, 250);
-}
-
-function clearError() {
-    const errorContainer = document.getElementById('errorContainer');
-    if (!errorContainer) return;
-    if (errorDebounceTimeout) clearTimeout(errorDebounceTimeout);
-    errorContainer.innerHTML = '';
-    lastError = { message: null };
-    hasError = false;
-    console.log('Error cleared');
-    updatePlayerDisplay();
-    updateMediaSession();
-}
-
 function startHeartbeat() {
     stopHeartbeat();
+    if (!currentStation || isOffline) {
+        console.warn('Heartbeat not started: no station or offline');
+        return;
+    }
     heartbeatTimer = setInterval(() => {
+        console.log('Heartbeat check:', { isPlaying, station: currentStation.name });
         if (isPlaying && !audio.paused && audio.currentTime > 0) {
-            console.log('Heartbeat: Audio playing', { station: currentStation?.name, time: audio.currentTime });
-        } else {
-            console.warn('Heartbeat: Audio stopped unexpectedly', { isPlaying, paused: audio.paused, time: audio.currentTime });
-            if (!isManuallyPaused && !isOffline && currentStation) {
-                showError('The music stopped unexpectedly.\nPlease press play to resume.');
-                audio.pause();
-                isPlaying = false;
-                updatePlayerDisplay();
-                updateMediaSession();
-                stopHeartbeat();
-                stopSilenceDetection();
-            }
+            console.log('Station is alive:', currentStation.name);
+        } else if (!isManuallyPaused) {
+            console.warn('Heartbeat failed, attempting to reconnect...');
+            showError('Lost connection to the station.\nTrying to reconnect...');
+            showCustomNotification("Lost Connection", {
+                body: `Lost connection to ${currentStation.name}. Trying to reconnect...`,
+            });
+            playStation(currentStation);
         }
     }, HEARTBEAT_INTERVAL);
-    console.log('Heartbeat started');
+    console.log('Heartbeat started for:', currentStation.name);
 }
 
 function stopHeartbeat() {
@@ -1570,11 +1457,13 @@ function stopPlayback() {
     updatePlayerDisplay();
     updateMediaSession();
     showError('Music is manually stopped.');
+    showCustomNotification("Playback Stopped", {
+        body: "Music has been stopped.",
+    });
     setTimeout(() => {
         isStopping = false;
         console.log('Stopping flag reset');
     }, 500);
-    console.log('Playback stopped, state reset, station dropdown reset to "Select Station"');
 }
 
 function previousStation() {
@@ -1583,11 +1472,17 @@ function previousStation() {
     const currentValue = stationSelect.value;
     if (!currentValue || options.length === 0) {
         console.log('No previous station available');
+        showCustomNotification("No Previous Station", {
+            body: "No stations available.",
+        });
         return;
     }
     const currentIndex = options.findIndex(opt => opt.value === currentValue);
     if (currentIndex <= 0) {
         console.log('At the first station');
+        showCustomNotification("No Previous Station", {
+            body: "You’re at the first station.",
+        });
         return;
     }
     const prevOption = options[currentIndex - 1];
@@ -1597,7 +1492,6 @@ function previousStation() {
     selectedFromFavorites = type === 'fav';
     playStation(station);
     stationSelect.value = prevOption.value;
-    updateMediaSession();
 }
 
 function nextStation() {
@@ -1606,11 +1500,17 @@ function nextStation() {
     const currentValue = stationSelect.value;
     if (!currentValue || options.length === 0) {
         console.log('No next station available');
+        showCustomNotification("No Next Station", {
+            body: "No stations available.",
+        });
         return;
     }
     const currentIndex = options.findIndex(opt => opt.value === currentValue);
     if (currentIndex >= options.length - 1) {
         console.log('At the last station');
+        showCustomNotification("No Next Station", {
+            body: "You’re at the last station.",
+        });
         return;
     }
     const nextOption = options[currentIndex + 1];
@@ -1620,129 +1520,230 @@ function nextStation() {
     selectedFromFavorites = type === 'fav';
     playStation(station);
     stationSelect.value = nextOption.value;
-    updateMediaSession();
 }
 
 function updatePlayerDisplay() {
+    const nowPlaying = document.getElementById('nowPlaying');
     const playPauseBtn = document.getElementById('playPauseBtn');
     const stopBtn = document.getElementById('stopBtn');
     const previousBtn = document.getElementById('previousBtn');
     const nextBtn = document.getElementById('nextBtn');
-    const nowPlaying = document.getElementById('nowPlaying');
-    const stationSelect = document.getElementById('stationSelect');
+    const player = document.querySelector('.player');
     const muteBtn = document.getElementById('muteBtn');
+    const volumeSlider = document.getElementById('volume');
 
-    playPauseBtn.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
-    playPauseBtn.disabled = !currentStation || isOffline;
-    playPauseBtn.classList.toggle('active', isPlaying);
-    playPauseBtn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
+    if (!nowPlaying || !playPauseBtn || !stopBtn || !previousBtn || !nextBtn || !player || !muteBtn || !volumeSlider) {
+        console.error('Player display elements missing');
+        return;
+    }
 
-    stopBtn.disabled = !currentStation || isOffline;
-    stopBtn.setAttribute('aria-label', 'Stop');
+    if (currentStation) {
+        nowPlaying.textContent = isPlaying ? currentStation.name : `Paused: ${currentStation.name}`;
+        nowPlaying.classList.toggle('playing', isPlaying);
+        const isOverflowing = nowPlaying.scrollWidth > nowPlaying.clientWidth;
+        nowPlaying.classList.toggle('overflowing', isOverflowing && isPlaying);
+        playPauseBtn.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
+        playPauseBtn.classList.toggle('active', isPlaying);
+        playPauseBtn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
+        playPauseBtn.disabled = false;
+        stopBtn.disabled = false;
+        previousBtn.disabled = false;
+        nextBtn.disabled = false;
+        player.classList.toggle('progress-active', isPlaying);
+    } else {
+        nowPlaying.textContent = 'Select a station to play';
+        nowPlaying.classList.remove('playing', 'overflowing');
+        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+        playPauseBtn.classList.remove('active');
+        playPauseBtn.setAttribute('aria-label', 'Play');
+        playPauseBtn.disabled = true;
+        stopBtn.disabled = true;
+        previousBtn.disabled = true;
+        nextBtn.disabled = true;
+        player.classList.remove('progress-active');
+    }
 
-    const options = Array.from(stationSelect.options).filter(opt => opt.value !== '');
-    const currentValue = stationSelect.value;
-    const currentIndex = currentValue ? options.findIndex(opt => opt.value === currentValue) : -1;
-    previousBtn.disabled = !currentStation || isOffline || currentIndex <= 0;
-    previousBtn.setAttribute('aria-label', 'Previous Station');
-    nextBtn.disabled = !currentStation || isOffline || currentIndex >= options.length - 1 || currentIndex === -1;
-    nextBtn.setAttribute('aria-label', 'Next Station');
-
-    nowPlaying.innerHTML = currentStation
-        ? `<span>Now Playing: ${currentStation.name}</span>`
-        : `<span>Select a station to play</span>`;
-    nowPlaying.classList.toggle('playing', isPlaying && !!currentStation);
-    nowPlaying.classList.toggle('overflowing', currentStation && currentStation.name.length > 20);
-
-    muteBtn.innerHTML = isMuted
-        ? '<i class="fas fa-volume-mute"></i>'
-        : '<i class="fas fa-volume-up"></i>';
-    muteBtn.disabled = !currentStation || isOffline;
+    muteBtn.innerHTML = isMuted ? '<i class="fas fa-volume-mute"></i>' : '<i class="fas fa-volume-up"></i>';
     muteBtn.setAttribute('aria-label', isMuted ? 'Unmute' : 'Mute');
-
+    volumeSlider.value = audio.volume;
     updateFavoriteButton();
-    updateFavoriteItemButtons();
-    console.log('Player display updated:', {
-        station: currentStation?.name,
-        isPlaying,
-        hasError,
-        isOffline,
-        isMuted,
-        currentValue,
-        previousDisabled: previousBtn.disabled,
-        nextBtnDisabled: nextBtn.disabled
-    });
+    console.log('Player display updated', { station: currentStation?.name, isPlaying, isMuted });
+}
+
+function showError(message) {
+    const errorContainer = document.getElementById('errorContainer');
+    if (!errorContainer) {
+        console.error('Error container not found');
+        return;
+    }
+    if (lastError.message === message) {
+        console.log('Duplicate error suppressed:', message);
+        return;
+    }
+    lastError.message = message;
+
+    if (errorDebounceTimeout) {
+        clearTimeout(errorDebounceTimeout);
+    }
+
+    errorDebounceTimeout = setTimeout(() => {
+        console.log('Displaying error:', message);
+        errorContainer.innerHTML = `
+            <div class="error-container">
+                <span class="error">${message}</span>
+                <button class="retry-button" aria-label="Retry"><i class="fas fa-redo"></i> Retry</button>
+            </div>
+        `;
+        errorContainer.style.display = 'block';
+        const retryButton = errorContainer.querySelector('.retry-button');
+        if (retryButton) {
+            retryButton.addEventListener('click', () => {
+                console.log('Retry button clicked');
+                handleUserInteraction();
+                if (currentStation) {
+                    console.log('Retrying current station:', currentStation.name);
+                    playStation(currentStation);
+                } else {
+                    console.log('No current station, reinitializing app');
+                    initializeApp();
+                }
+            });
+        }
+    }, 250);
+}
+
+function clearError() {
+    const errorContainer = document.getElementById('errorContainer');
+    if (!errorContainer) {
+        console.error('Error container not found');
+        return;
+    }
+    if (errorDebounceTimeout) {
+        clearTimeout(errorDebounceTimeout);
+        errorDebounceTimeout = null;
+    }
+    errorContainer.innerHTML = '';
+    errorContainer.style.display = 'none';
+    lastError.message = null;
+    console.log('Error cleared');
+}
+
+function showLoading(show) {
+    const loading = document.getElementById('loading');
+    const progressBar = document.getElementById('progressBar');
+    if (!loading || !progressBar) {
+        console.error('Loading elements not found');
+        return;
+    }
+    isLoading = show;
+    loading.style.display = show ? 'block' : 'none';
+    loading.setAttribute('aria-busy', show);
+    if (show) {
+        let progress = 0;
+        progressBar.style.width = '0%';
+        const interval = setInterval(() => {
+            if (!isLoading) {
+                clearInterval(interval);
+                progressBar.style.width = '100%';
+                setTimeout(() => {
+                    loading.style.display = 'none';
+                    progressBar.style.width = '0%';
+                }, 300);
+                return;
+            }
+            progress = (progress + 1) % 100;
+            progressBar.style.width = `${progress}%`;
+            progressBar.setAttribute('aria-valuenow', progress);
+        }, 100);
+    }
+    console.log('Loading state:', show);
 }
 
 function setupNavigation() {
+    const menuLinks = document.querySelectorAll('.menu a');
     const toggleBtn = document.querySelector('.toggle-btn');
     const menu = document.querySelector('.menu');
-    const navLinks = document.querySelectorAll('.menu a');
-    const mainContent = document.getElementById('mainContent');
-    const favoritesContent = document.getElementById('favoritesContent');
-    const aboutContent = document.getElementById('aboutContent');
+    const views = {
+        home: document.getElementById('mainContent'),
+        favorites: document.getElementById('favoritesContent'),
+        about: document.getElementById('aboutContent')
+    };
 
-    toggleBtn.addEventListener('click', () => {
-        const isMenuOpen = menu.classList.toggle('show');
-        toggleBtn.classList.toggle('active', isMenuOpen);
-        toggleBtn.innerHTML = isMenuOpen
-            ? '<i class="fas fa-times"></i>'
-            : '<i class="fas fa-bars"></i>';
-        console.log('Menu toggled:', isMenuOpen ? 'open' : 'closed');
-    });
+    if (!menuLinks.length || !toggleBtn || !menu || !Object.values(views).every(v => v)) {
+        console.error('Navigation elements missing');
+        return;
+    }
 
-    navLinks.forEach(link => {
+    menuLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             const view = link.getAttribute('data-view');
-            console.log('Navigation clicked:', view);
-
-            navLinks.forEach(l => l.classList.remove('active'));
+            console.log('Navigating to view:', view);
+            menuLinks.forEach(l => l.classList.remove('active'));
             link.classList.add('active');
-
-            mainContent.style.display = 'none';
-            favoritesContent.style.display = 'none';
-            aboutContent.style.display = 'none';
-
-            if (view === 'home') {
-                mainContent.style.display = 'block';
-            } else if (view === 'favorites') {
-                favoritesContent.style.display = 'block';
-                renderFavoritesList();
-            } else if (view === 'about') {
-                aboutContent.style.display = 'block';
-            }
-
+            Object.values(views).forEach(v => v.style.display = 'none');
+            views[view].style.display = 'block';
             menu.classList.remove('show');
             toggleBtn.classList.remove('active');
-            toggleBtn.innerHTML = '<i class="fas fa-bars"></i>';
-            console.log('View switched to:', view);
+            if (view === 'favorites') {
+                renderFavoritesList();
+            }
         });
     });
 
-    console.log('Navigation setup completed');
+    toggleBtn.addEventListener('click', () => {
+        const isActive = menu.classList.toggle('show');
+        toggleBtn.classList.toggle('active', isActive);
+        console.log('Menu toggled:', isActive ? 'shown' : 'hidden');
+    });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    initializeApp();
-
+    console.log('DOM content loaded, setting up event listeners');
     const stationSelect = document.getElementById('stationSelect');
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const previousBtn = document.getElementById('previousBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const favoriteBtn = document.getElementById('favoriteBtn');
+    const volumeSlider = document.getElementById('volume');
+    const muteBtn = document.getElementById('muteBtn');
+    const stationSearch = document.getElementById('stationSearch');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    const enableNotificationsBtn = document.getElementById('enableNotificationsBtn');
+
+    if (!stationSelect || !playPauseBtn || !stopBtn || !previousBtn || !nextBtn || !favoriteBtn || !volumeSlider || !muteBtn || !stationSearch || !clearSearchBtn || !enableNotificationsBtn) {
+        console.error('Required elements not found during setup');
+        showError('The app couldn’t load properly.\nPlease refresh the page.');
+        showCustomNotification("App Load Failed", {
+            body: "The app couldn’t load properly. Please refresh the page.",
+        });
+        return;
+    }
+
     stationSelect.addEventListener('change', (e) => {
         const value = e.target.value;
+        console.log('Station select changed:', value);
+        handleUserInteraction();
         if (!value) {
-            console.log('Station selection cleared');
             stopPlayback();
             return;
         }
         const [type, index] = value.split('-');
         const station = stations[parseInt(index)];
-        console.log('Station selected:', { name: station.name, type, index });
+        if (!station) {
+            console.error('Selected station not found:', value);
+            showError('Selected station not found.\nPlease try another.');
+            showCustomNotification("Station Not Found", {
+                body: "Selected station not found. Please try another.",
+            });
+            return;
+        }
+        console.log(`Selected station: ${station.name}, type: ${type}`);
         selectedFromFavorites = type === 'fav';
-        handleUserInteraction();
         playStation(station);
     });
 
-    const playPauseBtn = document.getElementById('playPauseBtn');
     playPauseBtn.addEventListener('click', () => {
         const now = Date.now();
         if (now - lastPlayButtonClick < PLAY_BUTTON_DEBOUNCE) {
@@ -1756,6 +1757,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentStation) {
             console.log('No station selected for play/pause');
             showError('Please select a station first!');
+            showCustomNotification("No Station Selected", {
+                body: "Please select a station to play.",
+            });
             return;
         }
         if (isPlaying) {
@@ -1775,94 +1779,121 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    const stopBtn = document.getElementById('stopBtn');
-    stopBtn.addEventListener('click', stopPlayback);
+    stopBtn.addEventListener('click', () => {
+        console.log('Stop button clicked');
+        handleUserInteraction();
+        stopPlayback();
+    });
 
-    const previousBtn = document.getElementById('previousBtn');
     previousBtn.addEventListener('click', () => {
+        console.log('Previous button clicked');
         handleUserInteraction();
         previousStation();
     });
 
-    const nextBtn = document.getElementById('nextBtn');
     nextBtn.addEventListener('click', () => {
+        console.log('Next button clicked');
         handleUserInteraction();
         nextStation();
     });
 
-    const favoriteBtn = document.getElementById('favoriteBtn');
     favoriteBtn.addEventListener('click', () => {
+        console.log('Favorite button clicked');
+        handleUserInteraction();
         if (currentStation) {
             toggleFavorite(currentStation);
         }
     });
 
-    const volumeInput = document.getElementById('volume');
-    const volumeLevel = document.getElementById('volumeLevel');
-    const muteBtn = document.getElementById('muteBtn');
-    volumeInput.addEventListener('input', () => {
-        const volume = parseFloat(volumeInput.value);
-        if (volume === 0) {
-            isMuted = true;
-            previousVolume = previousVolume || 0.5;
-            audio.volume = 0;
-            audio.muted = true;
-            volumeLevel.textContent = '0%';
-            muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
-            muteBtn.setAttribute('aria-label', 'Unmute');
-            console.log('Volume manually set to 0, muted', { volume, isMuted });
-        } else {
-            isMuted = false;
+    let isVolumeChanging = false;
+    volumeSlider.addEventListener('input', (e) => {
+        const volume = parseFloat(e.target.value);
+        console.log('Volume input changed:', volume);
+        if (!isVolumeChanging) {
+            isVolumeChanging = true;
             audio.volume = volume;
-            audio.muted = false;
-            previousVolume = volume;
-            volumeLevel.textContent = `${Math.round(volume * 100)}%`;
-            muteBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
-            muteBtn.setAttribute('aria-label', 'Mute');
-            console.log('Volume changed:', { volume, isMuted });
+            isMuted = volume === 0;
+            previousVolume = volume > 0 ? volume : previousVolume;
+            document.getElementById('volumeLevel').textContent = `${Math.round(volume * 100)}%`;
+            updatePlayerDisplay();
+            setTimeout(() => {
+                isVolumeChanging = false;
+            }, VOLUME_ANIMATION_DURATION);
         }
-        updatePlayerDisplay();
-        updateMediaSession();
     });
 
-    muteBtn.addEventListener('click', toggleMute);
+    muteBtn.addEventListener('click', () => {
+        console.log('Mute button clicked');
+        handleUserInteraction();
+        isMuted = !isMuted;
+        audio.volume = isMuted ? 0 : previousVolume;
+        volumeSlider.value = audio.volume;
+        document.getElementById('volumeLevel').textContent = `${Math.round(audio.volume * 100)}%`;
+        updatePlayerDisplay();
+    });
 
-    const stationSearch = document.getElementById('stationSearch');
-    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    let searchTimeout;
     stationSearch.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
         searchQuery = e.target.value.trim();
         console.log('Search query updated:', searchQuery);
-        updateSearchVisibility();
-        filterStationsByLanguage(selectedLanguage);
-        renderStationList();
-        updateMediaSession();
+        searchTimeout = setTimeout(() => {
+            filterStationsByLanguage(selectedLanguage);
+            renderStationList(true);
+            updateSearchVisibility();
+        }, 300);
     });
 
     clearSearchBtn.addEventListener('click', () => {
+        console.log('Clear search button clicked');
         stationSearch.value = '';
         searchQuery = '';
-        console.log('Search cleared');
-        updateSearchVisibility();
         filterStationsByLanguage(selectedLanguage);
-        renderStationList();
-        updateMediaSession();
+        renderStationList(true);
+        updateSearchVisibility();
+    });
+
+    enableNotificationsBtn.addEventListener('click', async () => {
+        console.log('Enable notifications button clicked');
+        const hasPermission = await requestNotificationPermission();
+        if (hasPermission) {
+            showCustomNotification("Notifications Enabled", {
+                body: "You’ll now receive updates from World FM Radio!",
+            });
+        } else {
+            showError("Notifications were not enabled.\nPlease check your browser settings.");
+            showCustomNotification("Notifications Not Enabled", {
+                body: "Notifications were not enabled. Please check your browser settings.",
+            });
+        }
     });
 
     window.addEventListener('online', () => {
+        console.log('Network status: online');
         isOffline = false;
-        console.log('Network online');
-        clearError();
         if (currentStation && !isPlaying && !isManuallyPaused) {
             console.log('Network restored, resuming playback');
             playStation(currentStation);
         }
-        updateMediaSession();
+        showCustomNotification("Back Online", {
+            body: "Your internet connection is restored!",
+        });
     });
 
     window.addEventListener('offline', () => {
+        console.log('Network status: offline');
         isOffline = true;
-        console.log('Network offline');
+        if (isPlaying) {
+            audio.pause();
+            isPlaying = false;
+            updatePlayerDisplay();
+            updateMediaSession();
+        }
         showError('You are offline!\nPlease check your internet connection.');
-        updateMediaSession();
+        showCustomNotification("Offline", {
+            body: "You are offline! Please check your internet connection.",
+        });
     });
+
+    initializeApp();
 });
