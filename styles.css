@@ -569,7 +569,8 @@ button#playPauseBtn.active {
     padding: 10px;
     background: rgba(255, 255, 255, 0.03);
     border-radius: 8px;
-    transition: background 0.3s ease;
+    transition: all 0.3s ease;
+    position: relative;
 }
 
 .favorite-item:hover {
@@ -611,12 +612,36 @@ button#playPauseBtn.active {
     box-shadow: 0 0 15px rgba(255, 107, 107, 0.7);
 }
 
+.favorite-item button.move-btn {
+    background: linear-gradient(45deg, #6b7280, #9ca3af);
+    width: 35px;
+    height: 35px;
+    font-size: 1em;
+}
+
+.favorite-item button.move-btn:hover {
+    box-shadow: 0 0 15px rgba(107, 114, 128, 0.7);
+}
+
+.favorite-item button.move-btn:disabled {
+    background: linear-gradient(45deg, #4b5563, #6b7280);
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.favorite-item button.up-btn i,
+.favorite-item button.down-btn i {
+    font-size: 0.9em;
+}
+
 .no-favorites {
     font-size: 1em;
     color: rgba(255, 255, 255, 0.7);
     text-align: center;
     padding: 20px;
 }
+
 /* About Container Styles */
 .about-container {
     background: var(--card-bg);
@@ -629,7 +654,7 @@ button#playPauseBtn.active {
 }
 
 .about-container h2 {
-    font-size: 1.5em;
+    font-size: 1.8em;
     font-weight: 600;
     margin: 0 0 20px;
     background: linear-gradient(to right, var(--primary), var(--secondary));
@@ -680,6 +705,33 @@ button#playPauseBtn.active {
 
 .about-container a:hover {
     color: var(--secondary);
+}
+
+#enableNotificationsBtn {
+    background: linear-gradient(45deg, var(--primary), var(--secondary));
+    color: var(--text-light);
+    font-family: "Poppins", sans-serif;
+    font-size: 0.9em;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    transition: all 0.3s ease;
+    width: 100%;
+    height: 38px;
+    text-align: center;
+}
+
+#enableNotificationsBtn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(0, 180, 216, 0.5);
+}
+
+#enableNotificationsBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 @media (max-width: 600px) {
@@ -756,5 +808,19 @@ button#playPauseBtn.active {
     }
     .favorite-item .favorite-actions {
         margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .favorite-item button {
+        width: 32px;
+        height: 32px;
+        font-size: 0.9em;
+    }
+    .about-container {
+        padding: 15px;
+    }
+    .about-container h2 {
+        font-size: 1.5em;
     }
 }
