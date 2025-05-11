@@ -364,112 +364,93 @@ function updateMediaSession() {
         hasError
     });
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentStation ? currentStation.name : 'World FM Radio',
+    navigator.mediaSession.metadata = currentStation ? new MediaMetadata({
+        title: currentStation.name,
         artist: 'World FM Radio',
         album: 'Live Stream',
         artwork: [
             {
-                src: currentStation?.favicon || 'https://via.placeholder.com/96x96',
+                src: currentStation.favicon || 'https://via.placeholder.com/96x96',
                 sizes: '96x96',
                 type: 'image/png'
             },
             {
-                src: currentStation?.favicon || 'https://via.placeholder.com/128x128',
+                src: currentStation.favicon || 'https://via.placeholder.com/128x128',
                 sizes: '128x128',
                 type: 'image/png'
             }
         ]
-    });
+    }) : null;
 
-    navigator.mediaSession.playbackState = isPlaying && !isOffline && !hasError
+    // Set playback state
+    navigator.mediaSession.playbackState = isOffline || hasError || !currentStation
+        ? 'none'
+        : isPlaying && !isManuallyPaused
         ? 'playing'
-        : currentStation && !isOffline
-        ? 'paused'
-        : 'none';
+        : 'paused';
 
-    navigator.mediaSession.setActionHandler('play', async () => {
-        console.log('Media session: Play action triggered');
-        handleUserInteraction();
+    // Clear existing handlers to prevent duplicates
+    navigator.mediaSession.setActionHandler('play', null);
+    navigator.mediaSession.setActionHandler('pause', null);
+    navigator.mediaSession.setActionHandler('stop', null);
+    navigator.mediaSession.setActionHandler('previoustrack', null);
+    navigator.mediaSession.setActionHandler('nexttrack', null);
 
-        if (!currentStation) {
-            console.warn('No station selected for media session play');
-            showError('Please select a station first!');
-            return;
-        }
+    if (currentStation && !isOffline) {
+        navigator.mediaSession.setActionHandler('play', async () => {
+            console.log('Media session: Play action triggered');
+            if (isPlaying && !isManuallyPaused) {
+                console.log('Already playing, ignoring play action');
+                return;
+            }
 
-        if (isOffline) {
-            console.warn('Cannot play: Offline');
-            showError('You are offline!\nPlease check your internet connection.');
-            return;
-        }
+            try {
+                await audioContext.resume();
+                audio.src = currentStation.url_resolved || currentStation.url;
+                await audio.play();
+                isPlaying = true;
+                isManuallyPaused = false;
+                hasError = false;
+                clearError();
+                startHeartbeat();
+                startSilenceDetection();
+                requestWakeLock();
+                keepAliveAudio.play().catch(err => console.warn('Keep-alive failed on play:', err));
+                updatePlayerDisplay();
+                updateMediaSession();
+                console.log('Media session play successful', { station: currentStation.name });
+            } catch (err) {
+                console.error('Media session play failed:', err.message);
+                hasError = true;
+                isPlaying = false;
+                showError(`Couldn’t play ${currentStation.name}.\nTry another station!`);
+                updatePlayerDisplay();
+                updateMediaSession();
+            }
+        });
 
-        if (isPlaying) {
-            console.log('Already playing, ignoring play action');
-            return;
-        }
+        navigator.mediaSession.setActionHandler('pause', () => {
+            console.log('Media session: Pause action triggered');
+            if (!isPlaying || isManuallyPaused) {
+                console.log('Already paused, ignoring pause action');
+                return;
+            }
 
-        try {
-            await audioContext.resume();
-            await audio.play();
-            isPlaying = true;
-            isManuallyPaused = false;
-            hasError = false;
-            clearError();
-            startHeartbeat();
-            startSilenceDetection();
-            requestWakeLock();
-            keepAliveAudio.play().catch(err => console.warn('Keep-alive failed on play:', err));
-            updatePlayerDisplay();
-            updateMediaSession();
-            console.log('Media session play successful');
-        } catch (err) {
-            console.error('Media session play failed:', err.message);
-            hasError = true;
+            audio.pause();
             isPlaying = false;
-            showError(`We couldn’t start ${currentStation.name}.\nPlease try again or pick a new station!`);
+            isManuallyPaused = true;
+            stopHeartbeat();
+            stopSilenceDetection();
+            releaseWakeLock();
+            showError('Paused! Click play to resume');
             updatePlayerDisplay();
             updateMediaSession();
-        }
-    });
+        });
 
-    navigator.mediaSession.setActionHandler('pause', () => {
-        console.log('Media session: Pause action triggered');
-        if (!isPlaying) {
-            console.log('Already paused, ignoring pause action');
-            return;
-        }
-
-        audio.pause();
-        isPlaying = false;
-        isManuallyPaused = true;
-        stopHeartbeat();
-        stopSilenceDetection();
-        releaseWakeLock();
-        showError('Paused! Click play to resume');
-        updatePlayerDisplay();
-        updateMediaSession();
-    });
-
-    navigator.mediaSession.setActionHandler('stop', () => {
-        console.log('Media session: Stop action triggered');
-        stopPlayback();
-        updateMediaSession();
-    });
-
-    navigator.mediaSession.setActionHandler('previoustrack', () => {
-        console.log('Media session: Previous track action triggered');
-        handleUserInteraction();
-        previousStation();
-        updateMediaSession();
-    });
-
-    navigator.mediaSession.setActionHandler('nexttrack', () => {
-        console.log('Media session: Next track action triggered');
-        handleUserInteraction();
-        nextStation();
-        updateMediaSession();
-    });
+        navigator.mediaSession.setActionHandler('stop', stopPlayback);
+        navigator.mediaSession.setActionHandler('previoustrack', previousStation);
+        navigator.mediaSession.setActionHandler('nexttrack', nextStation);
+    }
 
     console.log('Media session updated', { playbackState: navigator.mediaSession.playbackState });
 }
@@ -874,7 +855,7 @@ function getFavorites() {
 }
 
 function saveFavorites(favorites) {
-   localStorage.setItem('favorites', JSON.stringify(favorites));
+    localStorage.setItem('favorites', JSON.stringify(favorites));
 }
 
 function isFavorite(station) {
@@ -1332,7 +1313,7 @@ async function playStation(station) {
         audio.crossOrigin = 'anonymous';
         audio.volume = document.getElementById('volume') ? parseFloat(document.getElementById('volume').value) : 0.5;
         audio.muted = isMuted;
-        console.log('Starting playback...', { url, volume: audio.volume, muted: isMuted });
+        console.log('Starting playback...', { url, volume: audio.volume, muted: audio.muted });
 
         const isReady = await checkAudioReady(audio);
         if (!isReady) {
@@ -1559,7 +1540,7 @@ function startHeartbeat() {
     stopHeartbeat();
     heartbeatTimer = setInterval(() => {
         if (isPlaying && !audio.paused && audio.currentTime > 0) {
-            console.log('Heartbeat: Audio is playing', { station: currentStation?.name, time: audio.currentTime });
+            console.log('Heartbeat: Audio playing', { station: currentStation?.name, time: audio.currentTime });
         } else {
             console.warn('Heartbeat: Audio stopped unexpectedly', { isPlaying, paused: audio.paused, time: audio.currentTime });
             if (!isManuallyPaused && !isOffline && currentStation) {
@@ -1904,7 +1885,6 @@ document.addEventListener('DOMContentLoaded', () => {
             releaseWakeLock();
         }
         showError('You are offline!\nPlease check your internet connection.');
-        updatePlayerDisplay();
         updateMediaSession();
     });
 });
