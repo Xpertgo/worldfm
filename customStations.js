@@ -290,7 +290,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 1341
     },
     {
-        "name": "aakashvani",
+        "name": "Aakashvani",
         "url": "https://audio-edge-fvq45.ams.d.radiomast.io/3ccc1156-fcf8-4ba7-9a0c-28e3a465e1ae?listening-from-radio-garden=1607152226837",
         "url_resolved": "https://audio-edge-fvq45.ams.d.radiomast.io/3ccc1156-fcf8-4ba7-9a0c-28e3a465e1ae?listening-from-radio-garden=1607152226837",
         "favicon": "https://radiosindia.com/images/aakashvani.jpg",
@@ -300,7 +300,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 121
     },
     {
-        "name": "aalayam-fm",
+        "name": "Aalayam-fm",
         "url": "https://stream.zeno.fm/etwnrhnbkbruv",
         "url_resolved": "https://stream-175.zeno.fm/etwnrhnbkbruv?zt=eyJhbGciOiJIUzI1NiJ9.eyJzdHJlYW0iOiJldHducmhuYmticnV2IiwiaG9zdCI6InN0cmVhbS0xNzUuemVuby5mbSIsInRtIjpmYWxzZSwicnR0bCI6NSwianRpIjoiYmsyTy1UTkZSa0M0dktucFp5NTdnUSIsImlhdCI6MTc0NTczNTY2NiwiZXhwIjoxNzQ1NzM1NzI2fQ.ZPRWeLM6HYlqHG2g3fophvVzpQqCYA1zZwb_DU_TRek",
         "favicon": "https://liveradios.in/wp-content/uploads/Aalayam-FM.jpg",
@@ -320,7 +320,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "votes": 94
     },
     {
-        "name": "aasmanradio",
+        "name": "Aasman Radio",
         "url": "https://aasman_radio.ice.infomaniak.ch/aasmanradio.mp3",
         "url_resolved": "https://aasman_radio.ice.infomaniak.ch/aasmanradio.mp3",
         "favicon": "https://radiosindia.com/images/aasmanradio.jpg",
@@ -8216,7 +8216,7 @@ export const CUSTOM_INDIAN_STATIONS = [
         "name": "Radio BollyFm",
         "url": "http://stream.radiobollyfm.in:8201/hd?t=1526570335",
         "url_resolved": "http://stream.radiobollyfm.in:8201/hd?t=1526570335",
-        "favicon": "",
+        "favicon": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcShyQXZs-EqF9VjRtKo769IyMotG1IjttU97prispE9VL64X8cmoq1PWvs&s=10",
         "countrycode": "IN",
         "language": "hindi",
         "bitrate": 192,
@@ -9752,5 +9752,15 @@ export const CUSTOM_INDIAN_STATIONS = [
         "language": "hindi",
         "bitrate": 32,
         "votes": 114
+    },
+     {
+        "name": "Radio Milan",
+        "url": "https://rb.gy/tz1lby",
+        "url_resolved": "https://stream.zeno.fm/r733rtpx72quv?an-uid=7463878786559568452&dot-uid=0bef220400ceb42aa3eca5b7&triton-uid=cookie%3A31f36878-ffc2-4116-bebb-02df392b94a7&amb-uid=2944065826205720006&dbm-uid=CAESECAr971XxrzGhF9DdilAQDA&cto-uid=eed80a11-eb32-46e1-8ff8-90a6d5a4f592-6824692f-494e&bsw-uid=23b1d76b-9a93-46a0-a8e8-ca9dbbdacd52&dyn-uid=5964133592451994640&ttd-uid=82611359-bd3c-4d01-ba31-8f50374fe4c3&adtonosListenerId=01JV9E3RZXYVEK0NKZX3XE2YYJ&aw_0_req_lsid=1747296085517_0.6426632490211173",
+        "favicon": "https://liveradios.in/wp-content/uploads/radiomilan.jpg",
+        "countrycode": "IN",
+        "language": "Bengali",
+        "bitrate": 0,
+        "votes": 220
     }
 ];
