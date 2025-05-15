@@ -13,7 +13,7 @@ const SKIP_STREAM_TEST = true;
 const BATCH_SIZE = 50;
 const HEARTBEAT_INTERVAL = 5000;
 const CACHE_KEY = 'world_fm_radio_stations';
-const CACHE_DURATION = 1 * 60 * 60 * 1000;
+const CACHE_DURATION = 12 * 60 * 60 * 1000;
 const AUDIO_ERROR_RETRY_DELAY = 2000;
 const MAX_AUDIO_ERROR_RETRIES = 5;
 const INIT_RETRY_DELAY = 2000;
@@ -54,12 +54,46 @@ let isMuted = false;
 let lastPlayAttempt = 0;
 let lastPlayButtonClick = 0;
 let isStopping = false;
+let stationDisplayMode = 'custom-only';
 
 const failedFaviconCache = new Set();
 
 const keepAliveAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
 keepAliveAudio.loop = true;
 keepAliveAudio.volume = 0;
+
+// Utility function to sanitize station object for logging
+function sanitizeStationForLog(station) {
+    if (!station) return null;
+    const { url, url_resolved, ...safeStation } = station;
+    return safeStation;
+}
+
+// Developer-only function to set station display mode
+window.setStationDisplayMode = function(mode) {
+    const validModes = ['both', 'custom-only', 'api-only'];
+    if (!validModes.includes(mode)) {
+        console.error(`Invalid station display mode: ${mode}. Valid modes are: ${validModes.join(', ')}`);
+        throw new Error('Invalid station display mode');
+    }
+    stationDisplayMode = mode;
+    console.log(`Station display mode set to: ${mode}`);
+    
+    if (lastSelectedCountry) {
+        console.log(`Refreshing stations for country ${lastSelectedCountry} with mode ${mode}`);
+        // Reset relevant state to ensure fresh fetch
+        countryStations = [];
+        stations = [];
+        selectedLanguage = '';
+        searchQuery = '';
+        document.getElementById('stationSearch').value = '';
+        document.getElementById('languageSelect').value = '';
+        fetchAndDisplayAllStations(lastSelectedCountry).catch(err => {
+            console.error('Failed to refresh stations after mode change:', err.message);
+            showError('Couldn’t refresh stations.\nPlease try again!');
+        });
+    }
+};
 
 function initializeAudioElement() {
     if (audio) {
@@ -202,7 +236,7 @@ audio.addEventListener('playing', () => {
     startHeartbeat();
     startSilenceDetection();
     updateMediaSession();
-    console.log('Audio started playing', { station: currentStation?.name });
+    console.log('Audio started playing', { station: currentStation ? sanitizeStationForLog(currentStation) : null });
     updateFavoriteItemButtons();
 });
 
@@ -248,7 +282,7 @@ audio.addEventListener('error', (e) => {
     }
 });
 
-audio.addEventListener('canplay', () => console.log('Audio can play', { src: audio.src }));
+audio.addEventListener('canplay', () => console.log('Audio can play', { src: 'REDACTED' }));
 
 document.addEventListener('visibilitychange', () => {
     console.log('Visibility changed:', document.visibilityState);
@@ -325,7 +359,7 @@ function stopSilenceDetection() {
 
 function updateMediaSession() {
     if ('mediaSession' in navigator) {
-        console.log('Updating media session', { station: currentStation?.name, isPlaying });
+        console.log('Updating media session', { station: currentStation ? sanitizeStationForLog(currentStation) : null, isPlaying });
         navigator.mediaSession.metadata = new MediaMetadata({
             title: currentStation ? currentStation.name : 'World FM Radio',
             artist: 'World FM Radio',
@@ -388,7 +422,7 @@ async function fetchFromFastestServer(endpoint, retryCount = 0) {
     try {
         const results = await Promise.race(fetchPromises.filter(p => p));
         if (!results) throw new Error('All servers failed');
-        console.log('Fetched stations:', results.slice(0, 5));
+        console.log('Fetched stations:', results.slice(0, 5).map(sanitizeStationForLog));
         return results;
     } catch (error) {
         console.error('Fetch attempt failed:', error.message);
@@ -448,7 +482,7 @@ async function initializeApp(retryCount = 0) {
         let lastStation = null;
         try {
             lastStation = JSON.parse(localStorage.getItem('lastStation'));
-            console.log('Last station retrieved from localStorage:', lastStation);
+            console.log('Last station retrieved from localStorage:', lastStation ? sanitizeStationForLog(lastStation) : null);
         } catch (err) {
             console.warn('Failed to parse lastStation from localStorage:', err.message);
             localStorage.removeItem('lastStation');
@@ -483,7 +517,7 @@ async function initializeApp(retryCount = 0) {
             console.log('Attempting to restore last station:', lastStation.name);
             const stationUrl = lastStation.url_resolved || lastStation.url;
             if (!stationUrl || !/^https?:\/\//.test(stationUrl)) {
-                console.warn('Last station has invalid URL, clearing:', stationUrl);
+                console.warn('Last station has invalid URL, clearing:', 'REDACTED');
                 localStorage.removeItem('lastStation');
                 lastStation = null;
             } else {
@@ -532,8 +566,11 @@ function mergeDuplicateStations(stations) {
     const seen = new Map();
     const deduplicated = [];
     for (const station of stations) {
-        const normalizedLanguage = normalizeLanguage(station.language);
-        const key = `${station.name.toLowerCase()}|${normalizedLanguage || 'unknown'}|${station.url}`;
+        const normalizedLanguage = normalizeLanguage(station.language) || 'unknown';
+        // Use station_id if available (API stations), otherwise use url to avoid over-deduplication
+        const key = station.station_id 
+            ? `${station.station_id}|${normalizedLanguage}`
+            : `${station.name.toLowerCase()}|${normalizedLanguage}|${station.url}`;
         if (!seen.has(key)) {
             seen.set(key, station);
             deduplicated.push(station);
@@ -544,17 +581,49 @@ function mergeDuplicateStations(stations) {
 }
 
 async function fetchAndDisplayAllStations(countryCode) {
-    console.log('Fetching stations for country:', countryCode);
+    console.log('Fetching stations for country:', countryCode, 'with display mode:', stationDisplayMode);
     showLoading(true);
     try {
-        const cacheKey = `${CACHE_KEY}_${countryCode}`;
-        let allStations = null;
+        const cacheKey = `${CACHE_KEY}_${countryCode}_${stationDisplayMode}`; // Unique cache key per mode
+        let allStations = [];
 
-        if (countryCode.toUpperCase() === 'IN') {
-            console.log('Using custom stations for India, sorting by votes');
+        // Handle India with different modes
+        if (countryCode.toUpperCase() === 'IN' && stationDisplayMode === 'custom-only') {
+            console.log('Using only custom stations for India (custom-only mode)');
             allStations = [...CUSTOM_INDIAN_STATIONS].sort((a, b) => (b.votes || 0) - (a.votes || 0));
-            localStorage.setItem(cacheKey, JSON.stringify({ data: allStations, timestamp: Date.now() }));
+        } else if (countryCode.toUpperCase() === 'IN' && stationDisplayMode === 'both') {
+            console.log('Combining custom and API stations for India (both mode)');
+            // Start with custom stations
+            allStations = [...CUSTOM_INDIAN_STATIONS].sort((a, b) => (b.votes || 0) - (a.votes || 0));
+            // Check cache for API stations
+            let apiStations = null;
+            const cachedData = localStorage.getItem(cacheKey);
+            if (cachedData) {
+                const { data, timestamp } = JSON.parse(cachedData);
+                if (Date.now() - timestamp < CACHE_DURATION) {
+                    console.log('Using cached API stations for India (both mode)');
+                    apiStations = data.filter(station => !station.isCustom); // Exclude custom stations from cache
+                }
+            }
+            // Fetch API stations if not cached or expired
+            if (!apiStations) {
+                console.log('Fetching API stations for India (both mode)');
+                apiStations = await fetchFromFastestServer(`/json/stations/bycountrycodeexact/${countryCode}?hidebroken=true&order=votes&reverse=true`);
+                if (!apiStations || !apiStations.length) {
+                    console.warn('No API stations returned for India');
+                    apiStations = [];
+                }
+            }
+            // Combine custom and API stations
+            allStations = [...allStations, ...apiStations.map(station => ({ ...station, isCustom: false }))];
+            // Mark custom stations for deduplication
+            allStations = allStations.map(station => ({
+                ...station,
+                isCustom: station.isCustom !== undefined ? station.isCustom : true
+            }));
         } else {
+            console.log('Fetching stations for mode:', stationDisplayMode);
+            // Check cache for non-India or api-only mode
             const cachedData = localStorage.getItem(cacheKey);
             if (cachedData) {
                 const { data, timestamp } = JSON.parse(cachedData);
@@ -563,19 +632,25 @@ async function fetchAndDisplayAllStations(countryCode) {
                     allStations = data;
                 }
             }
-            if (!allStations) {
+            // Fetch fresh stations if not cached or expired
+            if (!allStations.length) {
                 console.log('Fetching fresh stations from API...');
                 allStations = await fetchFromFastestServer(`/json/stations/bycountrycodeexact/${countryCode}?hidebroken=true&order=votes&reverse=true`);
                 if (!allStations || !allStations.length) {
                     console.warn('No stations returned from API for:', countryCode);
                     allStations = [];
                 }
-                localStorage.setItem(cacheKey, JSON.stringify({ data: allStations, timestamp: Date.now() }));
-                console.log('Stations cached successfully');
+                allStations = allStations.map(station => ({ ...station, isCustom: false }));
             }
         }
 
+        // Deduplicate combined stations
         countryStations = mergeDuplicateStations(allStations);
+        // Cache the combined/deduplicated stations
+        localStorage.setItem(cacheKey, JSON.stringify({ data: countryStations, timestamp: Date.now() }));
+        console.log('Stations cached successfully', { cacheKey, stationCount: countryStations.length });
+
+        // Reset filters and update UI
         selectedLanguage = '';
         searchQuery = '';
         document.getElementById('stationSearch').value = '';
@@ -588,9 +663,16 @@ async function fetchAndDisplayAllStations(countryCode) {
     } catch (error) {
         console.error('Failed to fetch/display stations:', error.message);
         stationsFailedToLoad = true;
-        if (countryCode.toUpperCase() === 'IN') {
-            console.log('Using custom stations for IN due to API failure');
-            countryStations = mergeDuplicateStations([...CUSTOM_INDIAN_STATIONS].sort((a, b) => (b.votes || 0) - (a.votes || 0)));
+        if (countryCode.toUpperCase() === 'IN' && stationDisplayMode !== 'api-only') {
+            console.log('Falling back to custom stations for India due to API failure');
+            countryStations = mergeDuplicateStations([...CUSTOM_INDIAN_STATIONS].sort((a, b) => (b.votes || 0) - (a.votes || 0)).map(station => ({
+                ...station,
+                isCustom: true
+            })));
+            localStorage.setItem(cacheKey, JSON.stringify({
+                data: countryStations,
+                timestamp: Date.now()
+            }));
             selectedLanguage = '';
             searchQuery = '';
             document.getElementById('stationSearch').value = '';
@@ -598,12 +680,9 @@ async function fetchAndDisplayAllStations(countryCode) {
             populateLanguageDropdown();
             renderStationList();
             renderFavoritesList();
-            localStorage.setItem(`${CACHE_KEY}_${countryCode}`, JSON.stringify({
-                data: countryStations,
-                timestamp: Date.now()
-            }));
         } else {
             showError('No stations loaded.\nPlease try another country or check your connection.');
+            countryStations = [];
             stations = [];
             renderStationList();
             renderFavoritesList();
@@ -1010,13 +1089,13 @@ function renderFavoritesList() {
 
             if (currentStation && station.url === currentStation.url && isPlaying) {
                 console.log('Pausing current station from favorites list:', station.name);
-                isPlaying = false; // Update state immediately
+                isPlaying = false;
                 isManuallyPaused = true;
                 audio.pause();
                 stopHeartbeat();
                 stopSilenceDetection();
                 releaseWakeLock();
-                updatePlayerDisplay(); // This will update both main player and favorites buttons
+                updatePlayerDisplay();
                 showError("Paused! Click play to resume");
             } else {
                 console.log('Playing favorite station:', station.name);
@@ -1083,7 +1162,7 @@ async function testStream(url) {
         console.warn('Offline, skipping stream test');
         return false;
     }
-    console.log('Testing stream:', url);
+    console.log('Testing stream:', 'REDACTED');
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), TEST_STREAM_TIMEOUT);
@@ -1091,7 +1170,7 @@ async function testStream(url) {
         clearTimeout(timeoutId);
         const contentType = response.headers.get('Content-Type') || '';
         const isValid = (contentType.includes('audio/mpeg') || contentType.includes('audio/mp3')) && response.ok;
-        console.log('Stream test result:', { url, isValid, contentType });
+        console.log('Stream test result:', { url: 'REDACTED', isValid, contentType });
         return isValid;
     } catch (error) {
         console.error('Stream test failed:', error.message);
@@ -1101,24 +1180,49 @@ async function testStream(url) {
 
 async function checkAudioReady(audioElement) {
     return new Promise((resolve) => {
-        if (audioElement.readyState >= 2) {
-            console.log('Audio element ready:', { readyState: audioElement.readyState });
-            resolve(true);
-        } else {
-            console.log('Waiting for audio to be ready...', { readyState: audioElement.readyState });
-            audioElement.addEventListener('loadeddata', () => {
-                console.log('Audio data loaded:', { readyState: audioElement.readyState });
+        const startTime = performance.now();
+        const checkInterval = 500;
+        const maxDuration = 5000;
+
+        const checkReady = () => {
+            if (audioElement.readyState >= 2) {
+                console.log('Audio element ready:', { 
+                    readyState: audioElement.readyState, 
+                    elapsed: performance.now() - startTime 
+                });
                 resolve(true);
-            }, { once: true });
-            audioElement.addEventListener('error', () => {
-                console.error('Audio failed to load data');
+            } else if (performance.now() - startTime >= maxDuration) {
+                console.warn('Audio readiness check timed out', { 
+                    readyState: audioElement.readyState, 
+                    elapsed: performance.now() - startTime 
+                });
                 resolve(false);
-            }, { once: true });
-            setTimeout(() => {
-                console.warn('Audio readiness check timed out');
-                resolve(false);
-            }, 5000);
-        }
+            } else {
+                console.log('Polling for audio readiness...', { 
+                    readyState: audioElement.readyState, 
+                    elapsed: performance.now() - startTime 
+                });
+                setTimeout(checkReady, checkInterval);
+            }
+        };
+
+        audioElement.addEventListener('loadeddata', () => {
+            console.log('Audio data loaded:', { 
+                readyState: audioElement.readyState, 
+                elapsed: performance.now() - startTime 
+            });
+            resolve(true);
+        }, { once: true });
+
+        audioElement.addEventListener('error', () => {
+            console.error('Audio failed to load data:', { 
+                readyState: audioElement.readyState, 
+                elapsed: performance.now() - startTime 
+            });
+            resolve(false);
+        }, { once: true });
+
+        checkReady();
     });
 }
 
@@ -1129,7 +1233,7 @@ async function playStation(station) {
     }
 
     if (!station || !station.url) {
-        console.error('Invalid station or missing URL:', station);
+        console.error('Invalid station or missing URL:', sanitizeStationForLog(station));
         showError('No valid station selected.\nPlease choose another station.');
         return;
     }
@@ -1141,7 +1245,7 @@ async function playStation(station) {
     }
     lastPlayAttempt = now;
 
-    console.log('Attempting to play station:', { name: station.name, url: station.url, favicon: station.favicon });
+    console.log('Attempting to play station:', sanitizeStationForLog(station));
     clearError();
     showLoading(true);
     hasError = false;
@@ -1169,12 +1273,18 @@ async function playStation(station) {
         if (!url || !/^https?:\/\//.test(url)) {
             throw new Error('Invalid stream URL');
         }
-        console.log('Resolved URL:', url);
+        console.log('Resolved URL:', 'REDACTED');
+
+        audio.src = url;
+        audio.crossOrigin = 'anonymous';
+        audio.volume = document.getElementById('volume') ? parseFloat(document.getElementById('volume').value) : 0.5;
+        audio.muted = isMuted;
+        console.log('Audio source set for preloading:', { url: 'REDACTED', volume: audio.volume, muted: isMuted });
 
         if (url.endsWith('.m3u') || url.endsWith('.pls')) {
-            console.log('Fetching playlist file:', url);
+            console.log('Fetching playlist file:', 'REDACTED');
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
             try {
                 const response = await fetch(url, { signal: controller.signal });
                 clearTimeout(timeoutId);
@@ -1188,29 +1298,14 @@ async function playStation(station) {
                     throw new Error('No valid stream URL found in playlist');
                 }
                 url = streamUrl.trim();
-                console.log('Found stream URL in playlist:', url);
+                console.log('Found stream URL in playlist:', 'REDACTED');
+                audio.src = url;
+                console.log('Updated audio source after playlist resolution:', 'REDACTED');
             } catch (err) {
                 console.error('Playlist fetch failed:', err.message);
                 throw new Error('Unable to process playlist file');
             }
         }
-
-        if (!url || !/^https?:\/\//.test(url)) {
-            throw new Error('Station URL is invalid or empty after resolution');
-        }
-
-        if (!SKIP_STREAM_TEST) {
-            const isStreamValid = await testStream(url);
-            if (!isStreamValid) {
-                throw new Error('Stream test failed: This station isn’t supported by your device.');
-            }
-        }
-
-        audio.src = url;
-        audio.crossOrigin = 'anonymous';
-        audio.volume = document.getElementById('volume') ? parseFloat(document.getElementById('volume').value) : 0.5;
-        audio.muted = isMuted;
-        console.log('Starting playback...', { url, volume: audio.volume, muted: isMuted });
 
         const isReady = await checkAudioReady(audio);
         if (!isReady) {
@@ -1240,26 +1335,20 @@ async function playStation(station) {
         localStorage.setItem('lastStation', JSON.stringify(station));
         console.log('Station playing successfully:', station.name);
     } catch (error) {
-        console.error('Failed to play station:', error.message, { station });
+        console.error('Failed to play station:', error.message, { station: sanitizeStationForLog(station) });
         hasError = true;
         isPlaying = false;
         let errorMessage = `We couldn’t play ${station.name}.\nPlease try another station.`;
         if (error.message.includes('Invalid stream URL')) {
-            errorMessage = `Invalid URL for ${station.name}.\nPlease select another station.`;
-        } else if (error.message.includes('Station URL is invalid or empty after resolution')) {
-            errorMessage = `Station URL is invalid or empty for ${station.name}.\nPlease try another station.`;
+            errorMessage = `Invalid URL for ${station.name}.\nPlease try another station.`;
         } else if (error.message.includes('playlist')) {
             errorMessage = `Unable to load playlist for ${station.name}.\nPlease try another station.`;
         } else if (error.message.includes('timed out')) {
-            errorMessage = `Connection to ${station.name} timed out.\nPlease try again or select another station.`;
-        } else if (error.message.includes('Stream test failed')) {
-            errorMessage = `This station isn’t supported by your device.\nPlease try another station.`;
-        } else if (error.message.includes('user interaction required')) {
-            errorMessage = `Please interact with the page (e.g., click) to play ${station.name}.`;
+            errorMessage = `Connection to ${station.name} timed out.\nPlease try another station.`;
         } else if (error.message.includes('stream not ready')) {
-            errorMessage = `Stream for ${station.name} failed to load.\nPlease try again or select another station.`;
-        } else if (error.message.includes('play() request was interrupted')) {
-            errorMessage = `Playback of ${station.name} was interrupted.\nPlease try again.`;
+            errorMessage = `Stream for ${station.name} failed to load.\nPlease try another station.`;
+        } else if (error.message.includes('user interaction required')) {
+            errorMessage = `Please interact with the page to play ${station.name}.`;
         }
         showError(errorMessage);
     } finally {
@@ -1432,7 +1521,7 @@ function startHeartbeat() {
     stopHeartbeat();
     heartbeatTimer = setInterval(() => {
         if (isPlaying && !audio.paused && audio.currentTime > 0) {
-            console.log('Heartbeat: Audio is playing', { station: currentStation?.name, time: audio.currentTime });
+            console.log('Heartbeat: Audio is playing', { station: currentStation ? sanitizeStationForLog(currentStation) : null, time: audio.currentTime });
         } else {
             console.warn('Heartbeat: Audio stopped unexpectedly', { isPlaying, paused: audio.paused, time: audio.currentTime });
             if (!isManuallyPaused && !isOffline && currentStation) {
@@ -1557,9 +1646,9 @@ function updatePlayerDisplay() {
     muteBtn.disabled = !currentStation || isOffline;
 
     updateFavoriteButton();
-    updateFavoriteItemButtons(); // Ensure favorites buttons are updated whenever player display updates
+    updateFavoriteItemButtons();
     console.log('Player display updated:', {
-        station: currentStation?.name,
+        station: currentStation ? sanitizeStationForLog(currentStation) : null,
         isPlaying,
         hasError,
         isOffline,
@@ -1567,6 +1656,8 @@ function updatePlayerDisplay() {
         currentValue
     });
 }
+
+
 
 function setupNavigation() {
     const toggleBtn = document.querySelector('.toggle-btn');
@@ -1576,7 +1667,16 @@ function setupNavigation() {
     const favoritesContent = document.getElementById('favoritesContent');
     const aboutContent = document.getElementById('aboutContent');
 
-    toggleBtn.addEventListener('click', () => {
+    console.log('Toggle button:', toggleBtn);
+    console.log('Menu:', menu);
+    if (!toggleBtn || !menu) {
+        console.error('Navigation elements missing', { toggleBtn: !!toggleBtn, menu: !!menu });
+        return;
+    }
+
+    toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent click from bubbling to document
+        console.log('Toggle button clicked', e.target);
         const isMenuOpen = menu.classList.toggle('show');
         toggleBtn.classList.toggle('active', isMenuOpen);
         toggleBtn.innerHTML = isMenuOpen
@@ -1612,6 +1712,18 @@ function setupNavigation() {
             toggleBtn.innerHTML = '<i class="fas fa-bars"></i>';
             console.log('View switched to:', view);
         });
+    });
+
+    document.addEventListener('click', (e) => {
+        console.log('Document click detected', { target: e.target, menuOpen: menu.classList.contains('show') });
+        if (menu.classList.contains('show') && 
+            !menu.contains(e.target) && 
+            !toggleBtn.contains(e.target)) {
+            menu.classList.remove('show');
+            toggleBtn.classList.remove('active');
+            toggleBtn.innerHTML = '<i class="fas fa-bars"></i>';
+            console.log('Menu closed due to click outside');
+        }
     });
 
     console.log('Navigation setup completed');
@@ -1654,13 +1766,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (isPlaying) {
             console.log('Pausing playback from main player');
-            isPlaying = false; // Update state immediately
+            isPlaying = false;
             isManuallyPaused = true;
             audio.pause();
             stopHeartbeat();
             stopSilenceDetection();
             releaseWakeLock();
-            updatePlayerDisplay(); // This will update both main player and favorites buttons
+            updatePlayerDisplay();
             showError("Paused! Click play to resume");
         } else {
             console.log('Initiating playback for station from main player:', currentStation.name);
