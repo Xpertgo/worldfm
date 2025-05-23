@@ -5,7 +5,8 @@ import { CUSTOM_INDIAN_STATIONS } from './customStations.js';
 const API_SERVERS = [
     'https://all.api.radio-browser.info',
     'https://fi1.api.radio-browser.info',
-    'https://de2.api.radio-browser.info'
+    'https://de2.api.radio-browser.info',
+    'https://de1.api.radio-browser.info'
 ];
 const MAX_RETRIES = 3;
 const TEST_STREAM_TIMEOUT = 2000;
